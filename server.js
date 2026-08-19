@@ -51,13 +51,17 @@ function publicPlayer(p) {
 
 function roomStateFor(room, playerId) {
   const me = room.players.find(p => p.id === playerId);
+  const currentPlayer = room.phase === 'playing' ? room.players[room.currentIndex] : null;
   return {
     code: room.code,
     phase: room.phase,
     maxScore: room.maxScore,
+    turnTimerSeconds: room.turnTimerSeconds,
     deckCount: room.deck.length,
     openPile: room.openPile,
-    currentPlayerId: room.phase === 'playing' ? room.players[room.currentIndex]?.id : null,
+    currentPlayerId: currentPlayer ? currentPlayer.id : null,
+    canDeclare: currentPlayer ? canPlayerDeclare(room, currentPlayer) : false,
+    turnDeadline: room.turnDeadline || null,
     movesPlayed: room.movesPlayed,
     roundNumber: room.roundNumber,
     hostId: room.hostId,
@@ -67,6 +71,12 @@ function roomStateFor(room, playerId) {
     lastMoves: room.lastMoves,
     lastRoundResult: room.lastRoundResult,
   };
+}
+
+function canPlayerDeclare(room, player) {
+  if (room.roundNumber <= 1) return false; // no declaring in the first round
+  if (player.hasPlayedThisRound) return false; // not after you've already played this round
+  return true;
 }
 
 function broadcastState(room) {
@@ -86,11 +96,72 @@ function dealNewRound(room) {
 
   for (const p of activePlayers(room)) {
     p.hand = room.deck.splice(0, 5);
+    p.hasPlayedThisRound = false;
   }
   // first active player starts
   const active = activePlayers(room);
   room.currentIndex = room.players.findIndex(p => p.id === active[0].id);
   room.phase = 'playing';
+  startTurnTimer(room);
+}
+
+function clearTurnTimer(room) {
+  if (room.turnTimeoutHandle) {
+    clearTimeout(room.turnTimeoutHandle);
+    room.turnTimeoutHandle = null;
+  }
+  room.turnDeadline = null;
+}
+
+function startTurnTimer(room) {
+  clearTurnTimer(room);
+  if (!room.turnTimerSeconds) return; // no timer selected for this room
+  room.turnDeadline = Date.now() + room.turnTimerSeconds * 1000;
+  room.turnTimeoutHandle = setTimeout(() => autoPlayTurn(room), room.turnTimerSeconds * 1000);
+}
+
+// If a player runs out of time, auto-discard their lowest single card and
+// draw from the closed deck, then move on to the next player.
+function autoPlayTurn(room) {
+  if (room.phase !== 'playing') return;
+  const player = room.players[room.currentIndex];
+  if (!player || player.hand.length === 0) return;
+
+  const idx = room.currentIndex;
+  const lowest = [...player.hand].sort((a, b) => a.value - b.value)[0];
+  const oldOpenPile = room.openPile;
+
+  ensureDeck(room, 1);
+  let pickedCard;
+  if (room.deck.length > 0) {
+    pickedCard = room.deck.pop();
+  } else if (oldOpenPile && oldOpenPile.length > 0) {
+    pickedCard = oldOpenPile[0];
+  } else {
+    // nothing to pick, just skip discarding too
+    room.currentIndex = nextActiveIndex(room, idx);
+    startTurnTimer(room);
+    broadcastState(room);
+    return;
+  }
+
+  if (oldOpenPile && oldOpenPile.length > 0) {
+    const rest = oldOpenPile.filter(c => c.id !== pickedCard.id);
+    room.deadPile = room.deadPile.concat(rest);
+  }
+
+  player.hand = player.hand.filter(c => c.id !== lowest.id);
+  player.hand.push(pickedCard);
+  player.hasPlayedThisRound = true;
+
+  room.openPile = [lowest];
+  room.openPileOwnerId = player.id;
+  room.lastMoves[player.id] = { discarded: [lowest], picked: pickedCard, autoPlayed: true };
+  room.movesPlayed += 1;
+
+  room.currentIndex = nextActiveIndex(room, idx);
+  startTurnTimer(room);
+  broadcastState(room);
 }
 
 function nextActiveIndex(room, fromIndex) {
@@ -116,16 +187,17 @@ io.on('connection', socket => {
   socket.data.roomCode = null;
   socket.data.playerId = null;
 
-  socket.on('createRoom', ({ name, maxScore }, cb) => {
+  socket.on('createRoom', ({ name, maxScore, turnTimerSeconds }, cb) => {
     try {
       const code = genCode();
       const playerId = 'p_' + Math.random().toString(36).slice(2, 9);
       const room = {
         code,
         maxScore: [25, 50, 100].includes(Number(maxScore)) ? Number(maxScore) : 100,
+        turnTimerSeconds: [30, 60].includes(Number(turnTimerSeconds)) ? Number(turnTimerSeconds) : null,
         hostId: playerId,
         phase: 'lobby',
-        players: [{ id: playerId, name: (name || 'Player').slice(0, 16), socketId: socket.id, connected: true, hand: [], cumulative: 0, active: true }],
+        players: [{ id: playerId, name: (name || 'Player').slice(0, 16), socketId: socket.id, connected: true, hand: [], cumulative: 0, active: true, hasPlayedThisRound: false }],
         deck: [],
         openPile: [],
         openPileOwnerId: null,
@@ -135,6 +207,8 @@ io.on('connection', socket => {
         roundNumber: 1,
         lastMoves: {},
         lastRoundResult: null,
+        turnDeadline: null,
+        turnTimeoutHandle: null,
       };
       rooms[code] = room;
       socket.join(code);
@@ -154,7 +228,7 @@ io.on('connection', socket => {
     if (room.players.length >= MAX_PLAYERS) return cb({ ok: false, error: 'Room is full (max 5 players).' });
 
     const playerId = 'p_' + Math.random().toString(36).slice(2, 9);
-    room.players.push({ id: playerId, name: (name || 'Player').slice(0, 16), socketId: socket.id, connected: true, hand: [], cumulative: 0, active: true });
+    room.players.push({ id: playerId, name: (name || 'Player').slice(0, 16), socketId: socket.id, connected: true, hand: [], cumulative: 0, active: true, hasPlayedThisRound: false });
     socket.join(room.code);
     socket.data.roomCode = room.code;
     socket.data.playerId = playerId;
@@ -247,8 +321,10 @@ io.on('connection', socket => {
     room.openPileOwnerId = player.id;
     room.lastMoves[player.id] = { discarded: discardCards, picked: pickedCard };
     room.movesPlayed += 1;
+    player.hasPlayedThisRound = true;
 
     room.currentIndex = nextActiveIndex(room, idx);
+    startTurnTimer(room);
     broadcastState(room);
   });
 
@@ -260,6 +336,16 @@ io.on('connection', socket => {
       socket.emit('errorMsg', "It's not your turn.");
       return;
     }
+    if (room.roundNumber <= 1) {
+      socket.emit('errorMsg', 'You cannot declare during the first round.');
+      return;
+    }
+    if (player.hasPlayedThisRound) {
+      socket.emit('errorMsg', 'You cannot declare after already playing this round.');
+      return;
+    }
+
+    clearTurnTimer(room);
 
     const active = activePlayers(room);
     const scores = {};
@@ -269,6 +355,11 @@ io.on('connection', socket => {
     const minScore = Math.min(...Object.values(scores));
     const correct = declarerScore <= minScore;
 
+    // Scoring rules:
+    //  - Correct declare: declarer scores 0, everyone else scores
+    //    (their hand score - declarer's hand score).
+    //  - Incorrect declare: declarer takes a 20 point penalty plus the
+    //    gap to the real lowest score; everyone else scores 0 for the round.
     const roundAdd = {};
     if (correct) {
       roundAdd[player.id] = 0;
@@ -280,7 +371,7 @@ io.on('connection', socket => {
       roundAdd[player.id] = 20 + (declarerScore - minScore);
       for (const p of active) {
         if (p.id === player.id) continue;
-        roundAdd[p.id] = scores[p.id];
+        roundAdd[p.id] = 0;
       }
     }
 
@@ -340,6 +431,7 @@ io.on('connection', socket => {
     }
     // clean up empty rooms
     if (room.players.every(p => !p.connected)) {
+      clearTurnTimer(room);
       delete rooms[room.code];
     } else {
       broadcastState(room);
