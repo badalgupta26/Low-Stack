@@ -1,0 +1,62 @@
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: -apple-system, Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  color: #111;
+  background: #fff;
+  padding: 12px 14px 40px;
+}
+h1 { font-size: 19px; margin: 6px 0 8px; display: inline-block; }
+h2 { font-size: 15px; margin: 14px 0 4px; }
+a { color: #1155cc; text-decoration: underline; margin-left: 10px; font-size: 14px; }
+.hidden { display: none !important; }
+.block { margin-bottom: 14px; }
+label { display: block; font-size: 12px; color: #444; margin-bottom: 3px; }
+input, select {
+  width: 100%; max-width: 260px; padding: 7px 8px; font-size: 15px;
+  border: 1px solid #999; border-radius: 4px; margin-bottom: 6px;
+}
+button {
+  padding: 8px 16px; font-size: 15px; border: 1px solid #888; border-radius: 18px;
+  background: #eee; color: #111; margin: 4px 6px 4px 0; cursor: pointer;
+}
+button:active { background: #ddd; }
+button:disabled { opacity: 0.4; }
+.error { color: #b00020; font-size: 13px; min-height: 16px; }
+
+.ptable { border-collapse: collapse; width: 100%; margin-top: 10px; font-size: 13px; }
+.ptable th, .ptable td { border: 1px solid #ccc; padding: 5px 6px; text-align: left; }
+.ptable th { background: #f2f2f2; }
+.ptable tr.me { background: #eaffea; }
+.ptable tr.turn { background: #fff3c4; }
+
+.topbar { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
+.meta { font-size: 13px; color: #333; margin: 2px 0; }
+
+.table-area { display: flex; align-items: flex-start; justify-content: space-between; margin: 14px 0 6px; }
+.pile-label { font-weight: bold; font-size: 13px; margin-bottom: 4px; }
+.pile-block { flex: 1; }
+
+.card-row { display: flex; flex-wrap: wrap; gap: 6px; min-height: 64px; align-items: flex-end; }
+
+.card {
+  width: 42px; height: 60px; border: 1px solid #333; border-radius: 5px;
+  background: #fff; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; font-size: 14px; font-weight: bold; cursor: pointer;
+  user-select: none; box-shadow: 1px 1px 2px rgba(0,0,0,0.15);
+  transition: transform 0.1s;
+}
+.card.red { color: #c0392b; }
+.card.black { color: #111; }
+.card.selected { transform: translateY(-10px); border-color: #1155cc; border-width: 2px; }
+.card.back {
+  background: repeating-linear-gradient(45deg, #b00020, #b00020 4px, #d32f2f 4px, #d32f2f 8px);
+  color: #fff; font-size: 22px; cursor: pointer;
+}
+.card.disabled { opacity: 0.45; cursor: default; }
+
+.hand-block { margin-top: 8px; }
+.actions { margin: 12px 0 6px; }
+
+#meta-turn { font-weight: bold; }

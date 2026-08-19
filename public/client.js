@@ -1,0 +1,299 @@
+const socket = io();
+
+let myId = null;
+let roomCode = null;
+let latestState = null;
+let selectedHandIds = new Set();
+let selectedPick = null; // { source: 'deck' } or { source: 'open', cardId }
+
+const screens = {
+  home: document.getElementById('screen-home'),
+  lobby: document.getElementById('screen-lobby'),
+  game: document.getElementById('screen-game'),
+  over: document.getElementById('screen-over'),
+};
+
+function showScreen(name) {
+  for (const k in screens) screens[k].classList.toggle('hidden', k !== name);
+}
+
+function suitChar(suit) {
+  return { S: '♠', H: '♥', D: '♦', C: '♣' }[suit];
+}
+function suitColor(suit) {
+  return suit === 'H' || suit === 'D' ? 'red' : 'black';
+}
+
+function cardEl(card, { selectable = false, selected = false, disabled = false, onClick = null } = {}) {
+  const el = document.createElement('div');
+  el.className = `card ${suitColor(card.suit)}${selected ? ' selected' : ''}${disabled ? ' disabled' : ''}`;
+  el.innerHTML = `<div>${card.rank}</div><div>${suitChar(card.suit)}</div>`;
+  if (selectable && !disabled && onClick) el.addEventListener('click', onClick);
+  return el;
+}
+
+// ---------- persistence for refresh / rejoin ----------
+function saveSession() {
+  if (roomCode && myId) {
+    sessionStorage.setItem('ls_code', roomCode);
+    sessionStorage.setItem('ls_pid', myId);
+  }
+}
+function clearSession() {
+  sessionStorage.removeItem('ls_code');
+  sessionStorage.removeItem('ls_pid');
+}
+
+window.addEventListener('load', () => {
+  const code = sessionStorage.getItem('ls_code');
+  const pid = sessionStorage.getItem('ls_pid');
+  if (code && pid) {
+    socket.emit('rejoin', { code, playerId: pid }, (res) => {
+      if (res.ok) {
+        roomCode = res.code;
+        myId = res.playerId;
+      } else {
+        clearSession();
+      }
+    });
+  }
+});
+
+// ---------- HOME ----------
+document.getElementById('btn-create').addEventListener('click', () => {
+  const name = document.getElementById('input-name').value.trim() || 'Player';
+  const maxScore = document.getElementById('select-maxscore').value;
+  socket.emit('createRoom', { name, maxScore }, (res) => {
+    if (!res.ok) return showHomeError(res.error);
+    roomCode = res.code;
+    myId = res.playerId;
+    saveSession();
+  });
+});
+
+document.getElementById('btn-join').addEventListener('click', () => {
+  const name = document.getElementById('input-name').value.trim() || 'Player';
+  const code = document.getElementById('input-code').value.trim().toUpperCase();
+  if (!code) return showHomeError('Enter a room code.');
+  socket.emit('joinRoom', { name, code }, (res) => {
+    if (!res.ok) return showHomeError(res.error);
+    roomCode = res.code;
+    myId = res.playerId;
+    saveSession();
+  });
+});
+
+function showHomeError(msg) {
+  document.getElementById('home-error').textContent = msg || 'Something went wrong.';
+}
+
+// ---------- LOBBY ----------
+document.getElementById('btn-start').addEventListener('click', () => socket.emit('startGame'));
+document.getElementById('btn-leave-lobby').addEventListener('click', (e) => {
+  e.preventDefault();
+  leaveGame();
+});
+
+// ---------- GAME ----------
+document.getElementById('btn-refresh').addEventListener('click', (e) => { e.preventDefault(); location.reload(); });
+document.getElementById('btn-quit').addEventListener('click', (e) => { e.preventDefault(); leaveGame(); });
+
+document.getElementById('btn-move').addEventListener('click', () => {
+  clearGameError();
+  if (selectedHandIds.size === 0) return setGameError('Select at least one card to discard.');
+  if (!selectedPick) return setGameError('Tap the deck or a table card to pick.');
+  socket.emit('move', { discardIds: Array.from(selectedHandIds), pick: selectedPick });
+  selectedHandIds.clear();
+  selectedPick = null;
+});
+
+document.getElementById('btn-declare').addEventListener('click', () => {
+  clearGameError();
+  socket.emit('declare');
+});
+
+// ---------- ROUND / GAME OVER ----------
+document.getElementById('btn-newround').addEventListener('click', () => socket.emit('newRound'));
+document.getElementById('btn-exit').addEventListener('click', (e) => { e.preventDefault(); leaveGame(); });
+
+function leaveGame() {
+  socket.emit('leaveRoom');
+  clearSession();
+  roomCode = null;
+  myId = null;
+  latestState = null;
+  location.reload();
+}
+
+function setGameError(msg) { document.getElementById('game-error').textContent = msg; }
+function clearGameError() { document.getElementById('game-error').textContent = ''; }
+
+// ---------- SOCKET STATE HANDLER ----------
+socket.on('state', (state) => {
+  latestState = state;
+  render(state);
+});
+
+socket.on('errorMsg', (msg) => {
+  if (screens.game.classList.contains('hidden')) {
+    showHomeError(msg);
+  } else {
+    setGameError(msg);
+  }
+});
+
+function render(state) {
+  if (state.phase === 'lobby') {
+    renderLobby(state);
+    showScreen('lobby');
+  } else if (state.phase === 'playing') {
+    renderGame(state);
+    showScreen('game');
+  } else if (state.phase === 'roundOver' || state.phase === 'gameOver') {
+    renderOver(state);
+    showScreen('over');
+  }
+}
+
+function renderLobby(state) {
+  document.getElementById('lobby-code').textContent = state.code;
+  const body = document.getElementById('lobby-players');
+  body.innerHTML = '';
+  state.players.forEach(p => {
+    const tr = document.createElement('tr');
+    if (p.id === state.myId) tr.classList.add('me');
+    tr.innerHTML = `<td>${escapeHtml(p.name)}${p.id === state.hostId ? ' (host)' : ''}</td><td>${p.connected ? 'Ready' : 'Disconnected'}</td>`;
+    body.appendChild(tr);
+  });
+  const isHost = state.myId === state.hostId;
+  const startBtn = document.getElementById('btn-start');
+  startBtn.classList.toggle('hidden', !isHost);
+  startBtn.disabled = state.players.length < 2;
+  document.getElementById('lobby-hint').textContent = isHost
+    ? (state.players.length < 2 ? 'Waiting for at least one more player…' : 'Ready to start.')
+    : 'Waiting for host to start the game…';
+}
+
+function renderGame(state) {
+  document.getElementById('game-title').textContent = 'Hand in progress';
+  document.getElementById('meta-maxscore').textContent = state.maxScore;
+  document.getElementById('meta-deck').textContent = state.deckCount;
+
+  const isMyTurn = state.currentPlayerId === state.myId;
+  const currentPlayer = state.players.find(p => p.id === state.currentPlayerId);
+  document.getElementById('meta-turn').textContent = isMyTurn
+    ? 'Your turn'
+    : `Current player: ${currentPlayer ? currentPlayer.name : ''}`;
+
+  // Open pile (table)
+  const openWrap = document.getElementById('open-pile');
+  openWrap.innerHTML = '';
+  if (!state.openPile || state.openPile.length === 0) {
+    const none = document.createElement('div');
+    none.style.fontSize = '12px';
+    none.style.color = '#777';
+    none.textContent = '(empty)';
+    openWrap.appendChild(none);
+  } else {
+    state.openPile.forEach(card => {
+      const disabled = !isMyTurn;
+      const selected = selectedPick && selectedPick.source === 'open' && selectedPick.cardId === card.id;
+      const el = cardEl(card, {
+        selectable: true,
+        selected,
+        disabled,
+        onClick: () => {
+          if (!isMyTurn) return;
+          selectedPick = { source: 'open', cardId: card.id };
+          renderGame(latestState);
+        },
+      });
+      openWrap.appendChild(el);
+    });
+  }
+
+  // Deck
+  const deckEl = document.getElementById('deck-card');
+  deckEl.classList.toggle('selected', !!(selectedPick && selectedPick.source === 'deck'));
+  deckEl.classList.toggle('disabled', !isMyTurn);
+  deckEl.onclick = () => {
+    if (!isMyTurn) return;
+    selectedPick = { source: 'deck' };
+    renderGame(latestState);
+  };
+
+  // Hand
+  const handWrap = document.getElementById('hand-row');
+  handWrap.innerHTML = '';
+  state.myHand.forEach(card => {
+    const selected = selectedHandIds.has(card.id);
+    const el = cardEl(card, {
+      selectable: true,
+      selected,
+      disabled: !isMyTurn,
+      onClick: () => {
+        if (!isMyTurn) return;
+        if (selectedHandIds.has(card.id)) selectedHandIds.delete(card.id);
+        else selectedHandIds.add(card.id);
+        renderGame(latestState);
+      },
+    });
+    handWrap.appendChild(el);
+  });
+
+  document.getElementById('btn-move').disabled = !isMyTurn;
+  document.getElementById('btn-declare').disabled = !isMyTurn;
+
+  // Score table
+  const body = document.getElementById('score-body');
+  body.innerHTML = '';
+  const ranked = state.players
+    .map(p => ({ ...p }))
+    .sort((a, b) => a.cumulative - b.cumulative);
+  state.players.forEach(p => {
+    const tr = document.createElement('tr');
+    if (p.id === state.myId) tr.classList.add('me');
+    if (p.id === state.currentPlayerId) tr.classList.add('turn');
+    const lm = state.lastMoves && state.lastMoves[p.id];
+    const discardedTxt = lm ? lm.discarded.map(c => c.rank + suitChar(c.suit)).join(' ') : '';
+    const pickedTxt = lm ? lm.picked.rank + suitChar(lm.picked.suit) : '';
+    const rank = ranked.findIndex(r => r.id === p.id) + 1;
+    tr.innerHTML = `<td>${escapeHtml(p.name)}${p.active ? '' : ' (out)'}</td><td>${discardedTxt}</td><td>${pickedTxt}</td><td>${p.cumulative}</td><td>${rank}</td>`;
+    body.appendChild(tr);
+  });
+
+  document.getElementById('moves-played').textContent = `Moves played: ${state.movesPlayed}`;
+  clearGameError();
+}
+
+function renderOver(state) {
+  const r = state.lastRoundResult;
+  document.getElementById('over-title').textContent = state.phase === 'gameOver' ? 'Game over' : 'Round over';
+  document.getElementById('over-declare-line').textContent = r
+    ? `${r.declarerName} declared — ${r.correct ? 'correct!' : 'incorrect declaration (+20 penalty)'}`
+    : '';
+
+  const body = document.getElementById('over-body');
+  body.innerHTML = '';
+  if (r) {
+    r.results.forEach(row => {
+      const tr = document.createElement('tr');
+      if (row.id === state.myId) tr.classList.add('me');
+      tr.innerHTML = `<td>${escapeHtml(row.name)}</td><td>${row.roundScore}</td><td>${row.cumulative}</td><td>${row.rank}</td>`;
+      body.appendChild(tr);
+    });
+  }
+
+  const isHost = state.myId === state.hostId;
+  const newRoundBtn = document.getElementById('btn-newround');
+  newRoundBtn.classList.toggle('hidden', !(isHost && state.phase === 'roundOver'));
+
+  selectedHandIds.clear();
+  selectedPick = null;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}

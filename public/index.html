@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Least Score</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div id="app">
+
+  <!-- HOME SCREEN -->
+  <section id="screen-home" class="screen">
+    <h1>Least Score</h1>
+    <div class="block">
+      <label>Your name</label>
+      <input id="input-name" type="text" maxlength="16" placeholder="e.g. Nish" />
+    </div>
+
+    <div class="block">
+      <h2>Create a room</h2>
+      <label>Max score (elimination)</label>
+      <select id="select-maxscore">
+        <option value="25">25</option>
+        <option value="50">50</option>
+        <option value="100" selected>100</option>
+      </select>
+      <button id="btn-create">Create Room</button>
+    </div>
+
+    <div class="block">
+      <h2>Join a room</h2>
+      <label>Room code</label>
+      <input id="input-code" type="text" maxlength="4" placeholder="e.g. A7K4" style="text-transform:uppercase" />
+      <button id="btn-join">Join Room</button>
+    </div>
+
+    <p id="home-error" class="error"></p>
+  </section>
+
+  <!-- LOBBY SCREEN -->
+  <section id="screen-lobby" class="screen hidden">
+    <h1>Room <span id="lobby-code"></span></h1>
+    <p>Share this code with friends (2-5 players).</p>
+    <table class="ptable">
+      <thead><tr><th>Player</th><th>Status</th></tr></thead>
+      <tbody id="lobby-players"></tbody>
+    </table>
+    <button id="btn-start" class="hidden">Start Game</button>
+    <p id="lobby-hint"></p>
+    <a href="#" id="btn-leave-lobby">Leave</a>
+  </section>
+
+  <!-- GAME SCREEN -->
+  <section id="screen-game" class="screen hidden">
+    <div class="topbar">
+      <h1 id="game-title">Hand in progress</h1>
+      <a href="#" id="btn-refresh">Refresh</a>
+      <a href="#" id="btn-quit">Quit</a>
+    </div>
+    <div class="meta">MaxScore (<span id="meta-maxscore"></span>) &nbsp; Deck: <span id="meta-deck"></span></div>
+    <div class="meta" id="meta-turn"></div>
+
+    <div class="table-area">
+      <div class="pile-block">
+        <div class="pile-label">Table</div>
+        <div id="open-pile" class="card-row"></div>
+      </div>
+      <div class="pile-block">
+        <div class="pile-label">Deck</div>
+        <div id="deck-card" class="card back">🂠</div>
+      </div>
+    </div>
+
+    <div class="hand-block">
+      <div class="pile-label">Your cards</div>
+      <div id="hand-row" class="card-row"></div>
+    </div>
+
+    <div class="actions">
+      <button id="btn-move">Move</button>
+      <button id="btn-declare">Declare</button>
+    </div>
+    <p id="game-error" class="error"></p>
+
+    <table class="ptable">
+      <thead><tr><th>Player</th><th>Discarded</th><th>Picked</th><th>Total</th><th>Rank</th></tr></thead>
+      <tbody id="score-body"></tbody>
+    </table>
+    <p id="moves-played"></p>
+  </section>
+
+  <!-- ROUND / GAME OVER SCREEN -->
+  <section id="screen-over" class="screen hidden">
+    <h1 id="over-title">Round over</h1>
+    <p id="over-declare-line"></p>
+    <table class="ptable">
+      <thead><tr><th>Player</th><th>Round</th><th>Total</th><th>Rank</th></tr></thead>
+      <tbody id="over-body"></tbody>
+    </table>
+    <button id="btn-newround" class="hidden">New Round</button>
+    <a href="#" id="btn-exit">Exit game</a>
+  </section>
+
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="client.js"></script>
+</body>
+</html>
