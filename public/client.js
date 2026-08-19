@@ -64,7 +64,8 @@ document.getElementById('btn-create').addEventListener('click', () => {
   const name = document.getElementById('input-name').value.trim() || 'Player';
   const maxScore = document.getElementById('select-maxscore').value;
   const turnTimerSeconds = Number(document.getElementById('select-timer').value) || null;
-  socket.emit('createRoom', { name, maxScore, turnTimerSeconds }, (res) => {
+  const playerLimit = Number(document.getElementById('select-playerlimit').value) || 5;
+  socket.emit('createRoom', { name, maxScore, turnTimerSeconds, playerLimit }, (res) => {
     if (!res.ok) return showHomeError(res.error);
     roomCode = res.code;
     myId = res.playerId;
@@ -158,6 +159,11 @@ function render(state) {
 
 function renderLobby(state) {
   document.getElementById('lobby-code').textContent = state.code;
+  document.getElementById('lobby-limit').textContent = `${state.players.length}/${state.playerLimit}`;
+
+  const waText = `Join my Least Score game! Room code: ${state.code} — ${window.location.origin}`;
+  document.getElementById('btn-whatsapp').href = `https://wa.me/?text=${encodeURIComponent(waText)}`;
+
   const body = document.getElementById('lobby-players');
   body.innerHTML = '';
   state.players.forEach(p => {
@@ -252,8 +258,8 @@ function renderGame(state) {
 
   const hintEl = document.getElementById('declare-hint');
   if (isMyTurn && !state.canDeclare) {
-    hintEl.textContent = state.roundNumber <= 1
-      ? "You can't declare during round 1."
+    hintEl.textContent = state.roundNumber <= 1 && state.movesPlayed === 0
+      ? "You can't declare before anyone has taken a turn."
       : "You can't declare — you've already played this round.";
   } else {
     hintEl.textContent = '';
