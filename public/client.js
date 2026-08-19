@@ -63,7 +63,8 @@ window.addEventListener('load', () => {
 document.getElementById('btn-create').addEventListener('click', () => {
   const name = document.getElementById('input-name').value.trim() || 'Player';
   const maxScore = document.getElementById('select-maxscore').value;
-  socket.emit('createRoom', { name, maxScore }, (res) => {
+  const turnTimerSeconds = Number(document.getElementById('select-timer').value) || null;
+  socket.emit('createRoom', { name, maxScore, turnTimerSeconds }, (res) => {
     if (!res.ok) return showHomeError(res.error);
     roomCode = res.code;
     myId = res.playerId;
@@ -185,6 +186,8 @@ function renderGame(state) {
     ? 'Your turn'
     : `Current player: ${currentPlayer ? currentPlayer.name : ''}`;
 
+  renderTimer(state);
+
   // Open pile (table)
   const openWrap = document.getElementById('open-pile');
   openWrap.innerHTML = '';
@@ -241,8 +244,20 @@ function renderGame(state) {
     handWrap.appendChild(el);
   });
 
+  const myTotal = state.myHand.reduce((sum, c) => sum + c.value, 0);
+  document.getElementById('hand-total').textContent = `(Total: ${myTotal})`;
+
   document.getElementById('btn-move').disabled = !isMyTurn;
-  document.getElementById('btn-declare').disabled = !isMyTurn;
+  document.getElementById('btn-declare').disabled = !isMyTurn || !state.canDeclare;
+
+  const hintEl = document.getElementById('declare-hint');
+  if (isMyTurn && !state.canDeclare) {
+    hintEl.textContent = state.roundNumber <= 1
+      ? "You can't declare during round 1."
+      : "You can't declare — you've already played this round.";
+  } else {
+    hintEl.textContent = '';
+  }
 
   // Score table
   const body = document.getElementById('score-body');
@@ -290,6 +305,24 @@ function renderOver(state) {
 
   selectedHandIds.clear();
   selectedPick = null;
+}
+
+let timerInterval = null;
+
+function renderTimer(state) {
+  clearInterval(timerInterval);
+  const el = document.getElementById('meta-timer');
+  if (!state.turnTimerSeconds || !state.turnDeadline) {
+    el.textContent = '';
+    return;
+  }
+  const tick = () => {
+    const remaining = Math.max(0, Math.ceil((state.turnDeadline - Date.now()) / 1000));
+    el.textContent = `Time left: ${remaining}s`;
+    if (remaining <= 0) clearInterval(timerInterval);
+  };
+  tick();
+  timerInterval = setInterval(tick, 1000);
 }
 
 function escapeHtml(str) {
