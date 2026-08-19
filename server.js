@@ -57,6 +57,7 @@ function roomStateFor(room, playerId) {
     phase: room.phase,
     maxScore: room.maxScore,
     turnTimerSeconds: room.turnTimerSeconds,
+    playerLimit: room.playerLimit,
     deckCount: room.deck.length,
     openPile: room.openPile,
     currentPlayerId: currentPlayer ? currentPlayer.id : null,
@@ -74,7 +75,7 @@ function roomStateFor(room, playerId) {
 }
 
 function canPlayerDeclare(room, player) {
-  if (room.roundNumber <= 1) return false; // no declaring in the first round
+  if (room.movesPlayed === 0) return false; // nobody has taken a turn yet this round
   if (player.hasPlayedThisRound) return false; // not after you've already played this round
   return true;
 }
@@ -187,7 +188,7 @@ io.on('connection', socket => {
   socket.data.roomCode = null;
   socket.data.playerId = null;
 
-  socket.on('createRoom', ({ name, maxScore, turnTimerSeconds }, cb) => {
+  socket.on('createRoom', ({ name, maxScore, turnTimerSeconds, playerLimit }, cb) => {
     try {
       const code = genCode();
       const playerId = 'p_' + Math.random().toString(36).slice(2, 9);
@@ -195,6 +196,7 @@ io.on('connection', socket => {
         code,
         maxScore: [25, 50, 100].includes(Number(maxScore)) ? Number(maxScore) : 100,
         turnTimerSeconds: [30, 60].includes(Number(turnTimerSeconds)) ? Number(turnTimerSeconds) : null,
+        playerLimit: [2, 3, 4, 5].includes(Number(playerLimit)) ? Number(playerLimit) : MAX_PLAYERS,
         hostId: playerId,
         phase: 'lobby',
         players: [{ id: playerId, name: (name || 'Player').slice(0, 16), socketId: socket.id, connected: true, hand: [], cumulative: 0, active: true, hasPlayedThisRound: false }],
@@ -225,7 +227,7 @@ io.on('connection', socket => {
     const room = rooms[(code || '').toUpperCase()];
     if (!room) return cb({ ok: false, error: 'Room not found.' });
     if (room.phase !== 'lobby') return cb({ ok: false, error: 'Game already in progress.' });
-    if (room.players.length >= MAX_PLAYERS) return cb({ ok: false, error: 'Room is full (max 5 players).' });
+    if (room.players.length >= room.playerLimit) return cb({ ok: false, error: `Room is full (max ${room.playerLimit} players).` });
 
     const playerId = 'p_' + Math.random().toString(36).slice(2, 9);
     room.players.push({ id: playerId, name: (name || 'Player').slice(0, 16), socketId: socket.id, connected: true, hand: [], cumulative: 0, active: true, hasPlayedThisRound: false });
@@ -336,8 +338,8 @@ io.on('connection', socket => {
       socket.emit('errorMsg', "It's not your turn.");
       return;
     }
-    if (room.roundNumber <= 1) {
-      socket.emit('errorMsg', 'You cannot declare during the first round.');
+    if (room.movesPlayed === 0) {
+      socket.emit('errorMsg', 'You cannot declare before anyone has taken a turn.');
       return;
     }
     if (player.hasPlayedThisRound) {
