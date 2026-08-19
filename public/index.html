@@ -20,6 +20,13 @@
 
     <div class="block">
       <h2>Create a room</h2>
+      <label>Number of players (2-5)</label>
+      <select id="select-playerlimit">
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+        <option value="5" selected>5</option>
+      </select>
       <label>Max score (elimination)</label>
       <select id="select-maxscore">
         <option value="25">25</option>
@@ -48,7 +55,8 @@
   <!-- LOBBY SCREEN -->
   <section id="screen-lobby" class="screen hidden">
     <h1>Room <span id="lobby-code"></span></h1>
-    <p>Share this code with friends (2-5 players).</p>
+    <p>Share this code with friends (<span id="lobby-limit"></span> players).</p>
+    <a id="btn-whatsapp" href="#" target="_blank" rel="noopener">Share on WhatsApp</a>
     <table class="ptable">
       <thead><tr><th>Player</th><th>Status</th></tr></thead>
       <tbody id="lobby-players"></tbody>
