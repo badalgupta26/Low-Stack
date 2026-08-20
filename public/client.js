@@ -111,6 +111,8 @@ document.getElementById('btn-move').addEventListener('click', () => {
 
 document.getElementById('btn-declare').addEventListener('click', () => {
   clearGameError();
+  const ok = window.confirm('Are you sure you want to declare?');
+  if (!ok) return;
   socket.emit('declare');
 });
 
@@ -200,7 +202,7 @@ function renderGame(state) {
   if (!state.openPile || state.openPile.length === 0) {
     const none = document.createElement('div');
     none.style.fontSize = '12px';
-    none.style.color = '#777';
+    none.style.color = '#8a8a90';
     none.textContent = '(empty)';
     openWrap.appendChild(none);
   } else {
@@ -275,7 +277,7 @@ function renderGame(state) {
     if (p.id === state.currentPlayerId) tr.classList.add('turn');
     const lm = state.lastMoves && state.lastMoves[p.id];
     const discardedTxt = lm ? lm.discarded.map(c => c.rank + suitChar(c.suit)).join(' ') : '';
-    const pickedTxt = lm ? lm.picked.rank + suitChar(lm.picked.suit) : '';
+    const pickedTxt = lm ? (lm.pickedSource === 'deck' ? '🂠 deck' : lm.picked.rank + suitChar(lm.picked.suit)) : '';
     const rank = ranked.findIndex(r => r.id === p.id) + 1;
     tr.innerHTML = `<td>${escapeHtml(p.name)}${p.active ? '' : ' (out)'}</td><td>${discardedTxt}</td><td>${pickedTxt}</td><td>${p.cumulative}</td><td>${rank}</td>`;
     body.appendChild(tr);
@@ -288,9 +290,27 @@ function renderGame(state) {
 function renderOver(state) {
   const r = state.lastRoundResult;
   document.getElementById('over-title').textContent = state.phase === 'gameOver' ? 'Game over' : 'Round over';
-  document.getElementById('over-declare-line').textContent = r
-    ? `${r.declarerName} declared — ${r.correct ? 'correct!' : 'incorrect declaration (+20 penalty)'}`
-    : '';
+
+  const declareLineEl = document.getElementById('over-declare-line');
+  const summaryEl = document.getElementById('over-summary');
+  if (r) {
+    declareLineEl.textContent = `${r.declarerName} declared — ${r.correct ? 'correct!' : 'incorrect declaration (+20 penalty)'}`;
+
+    const lines = [];
+    if (state.phase === 'gameOver' && r.gameWinnerName) {
+      lines.push(`🏆 ${r.gameWinnerName} wins the game!`);
+    } else {
+      if (r.roundWinnerName) lines.push(`Round winner: ${r.roundWinnerName}`);
+      if (r.roundLoserName) lines.push(`Round loser: ${r.roundLoserName}`);
+    }
+    if (r.eliminated && r.eliminated.length > 0) {
+      lines.push(`Eliminated: ${r.eliminated.map(e => `${e.name} (${e.cumulative})`).join(', ')}`);
+    }
+    summaryEl.innerHTML = lines.map(l => `<div>${escapeHtml(l)}</div>`).join('');
+  } else {
+    declareLineEl.textContent = '';
+    summaryEl.innerHTML = '';
+  }
 
   const body = document.getElementById('over-body');
   body.innerHTML = '';
@@ -306,9 +326,30 @@ function renderOver(state) {
   const isHost = state.myId === state.hostId;
   const newRoundBtn = document.getElementById('btn-newround');
   newRoundBtn.classList.toggle('hidden', !(isHost && state.phase === 'roundOver'));
+  if (isHost && state.phase === 'roundOver') newRoundBtn.textContent = 'Start Now';
+
+  renderRoundOverCountdown(state);
 
   selectedHandIds.clear();
   selectedPick = null;
+}
+
+let roundOverInterval = null;
+
+function renderRoundOverCountdown(state) {
+  clearInterval(roundOverInterval);
+  const el = document.getElementById('over-countdown');
+  if (state.phase !== 'roundOver' || !state.roundOverDeadline) {
+    el.textContent = '';
+    return;
+  }
+  const tick = () => {
+    const remaining = Math.max(0, Math.ceil((state.roundOverDeadline - Date.now()) / 1000));
+    el.textContent = `Next round starts automatically in ${remaining}s…`;
+    if (remaining <= 0) clearInterval(roundOverInterval);
+  };
+  tick();
+  roundOverInterval = setInterval(tick, 1000);
 }
 
 let timerInterval = null;
