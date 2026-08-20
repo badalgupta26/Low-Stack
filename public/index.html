@@ -15,7 +15,7 @@
     <h1>Least Score</h1>
     <div class="block">
       <label>Your name</label>
-      <input id="input-name" type="text" maxlength="16" placeholder="e.g. Nish" />
+      <input id="input-name" type="text" maxlength="16" placeholder="e.g. Cloud" />
     </div>
 
     <div class="block">
@@ -111,10 +111,12 @@
   <section id="screen-over" class="screen hidden">
     <h1 id="over-title">Round over</h1>
     <p id="over-declare-line"></p>
+    <div id="over-summary" class="summary-lines"></div>
     <table class="ptable">
       <thead><tr><th>Player</th><th>Round</th><th>Total</th><th>Rank</th></tr></thead>
       <tbody id="over-body"></tbody>
     </table>
+    <p id="over-countdown" class="meta"></p>
     <button id="btn-newround" class="hidden">New Round</button>
     <a href="#" id="btn-exit">Exit game</a>
   </section>
