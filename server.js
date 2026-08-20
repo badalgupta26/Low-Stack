@@ -63,6 +63,7 @@ function roomStateFor(room, playerId) {
     currentPlayerId: currentPlayer ? currentPlayer.id : null,
     canDeclare: currentPlayer ? canPlayerDeclare(room, currentPlayer) : false,
     turnDeadline: room.turnDeadline || null,
+    roundOverDeadline: room.roundOverDeadline || null,
     movesPlayed: room.movesPlayed,
     roundNumber: room.roundNumber,
     hostId: room.hostId,
@@ -95,16 +96,42 @@ function dealNewRound(room) {
   room.lastMoves = {};
   room.lastRoundResult = null;
   room.playersMovedThisRound = new Set();
+  clearRoundOverTimer(room);
 
   for (const p of activePlayers(room)) {
     p.hand = room.deck.splice(0, 5);
     p.hasPlayedThisRound = false;
   }
-  // first active player starts
+  // rotate who starts each round among the currently active players
   const active = activePlayers(room);
-  room.currentIndex = room.players.findIndex(p => p.id === active[0].id);
+  room.roundStartPos = ((room.roundStartPos || 0) % active.length + active.length) % active.length;
+  const starter = active[room.roundStartPos];
+  room.currentIndex = room.players.findIndex(p => p.id === starter.id);
+  room.roundStartPos = (room.roundStartPos + 1) % active.length;
+
   room.phase = 'playing';
   startTurnTimer(room);
+}
+
+function clearRoundOverTimer(room) {
+  if (room.roundOverTimeoutHandle) {
+    clearTimeout(room.roundOverTimeoutHandle);
+    room.roundOverTimeoutHandle = null;
+  }
+  room.roundOverDeadline = null;
+}
+
+const ROUND_OVER_AUTO_SECONDS = 10;
+
+function startRoundOverTimer(room) {
+  clearRoundOverTimer(room);
+  room.roundOverDeadline = Date.now() + ROUND_OVER_AUTO_SECONDS * 1000;
+  room.roundOverTimeoutHandle = setTimeout(() => {
+    if (room.phase !== 'roundOver') return;
+    room.roundNumber += 1;
+    dealNewRound(room);
+    broadcastState(room);
+  }, ROUND_OVER_AUTO_SECONDS * 1000);
 }
 
 function clearTurnTimer(room) {
@@ -134,11 +161,13 @@ function autoPlayTurn(room) {
   const oldOpenPile = room.openPile;
 
   ensureDeck(room, 1);
-  let pickedCard;
+  let pickedCard, pickedSource;
   if (room.deck.length > 0) {
     pickedCard = room.deck.pop();
+    pickedSource = 'deck';
   } else if (oldOpenPile && oldOpenPile.length > 0) {
     pickedCard = oldOpenPile[0];
+    pickedSource = 'open';
   } else {
     // nothing to pick, just skip discarding too
     room.currentIndex = nextActiveIndex(room, idx);
@@ -159,7 +188,7 @@ function autoPlayTurn(room) {
 
   room.openPile = [lowest];
   room.openPileOwnerId = player.id;
-  room.lastMoves[player.id] = { discarded: [lowest], picked: pickedCard, autoPlayed: true };
+  room.lastMoves[player.id] = { discarded: [lowest], picked: pickedCard, pickedSource, autoPlayed: true };
   room.movesPlayed += 1;
 
   room.currentIndex = nextActiveIndex(room, idx);
@@ -214,6 +243,9 @@ io.on('connection', socket => {
         turnDeadline: null,
         turnTimeoutHandle: null,
         playersMovedThisRound: new Set(),
+        roundStartPos: 0,
+        roundOverDeadline: null,
+        roundOverTimeoutHandle: null,
       };
       rooms[code] = room;
       socket.join(code);
@@ -324,7 +356,7 @@ io.on('connection', socket => {
 
     room.openPile = discardCards;
     room.openPileOwnerId = player.id;
-    room.lastMoves[player.id] = { discarded: discardCards, picked: pickedCard };
+    room.lastMoves[player.id] = { discarded: discardCards, picked: pickedCard, pickedSource: (pick && pick.source === 'open') ? 'open' : 'deck' };
     room.movesPlayed += 1;
     player.hasPlayedThisRound = true;
     room.playersMovedThisRound.add(player.id);
@@ -390,17 +422,26 @@ io.on('connection', socket => {
       .sort((a, b) => a.cumulative - b.cumulative)
       .map((r, i) => ({ ...r, rank: i + 1 }));
 
+    const roundWinner = rankSorted[0] || null;
+    const roundLoser = rankSorted[rankSorted.length - 1] || null;
+    const eliminatedThisRound = active.filter(p => !p.active).map(p => ({ id: p.id, name: p.name, cumulative: p.cumulative }));
+
     room.lastRoundResult = {
       declarerId: player.id,
       declarerName: player.name,
       correct,
       results: rankSorted,
+      roundWinnerName: roundWinner ? roundWinner.name : null,
+      roundLoserName: roundLoser && roundLoser.id !== (roundWinner && roundWinner.id) ? roundLoser.name : null,
+      eliminated: eliminatedThisRound,
     };
 
     if (stillActive.length <= 1) {
       room.phase = 'gameOver';
+      room.lastRoundResult.gameWinnerName = stillActive.length === 1 ? stillActive[0].name : null;
     } else {
       room.phase = 'roundOver';
+      startRoundOverTimer(room);
     }
     broadcastState(room);
   });
@@ -410,6 +451,7 @@ io.on('connection', socket => {
     if (!room) return;
     if (socket.data.playerId !== room.hostId) return;
     if (room.phase !== 'roundOver') return;
+    clearRoundOverTimer(room);
     room.roundNumber += 1;
     dealNewRound(room);
     broadcastState(room);
@@ -434,6 +476,7 @@ io.on('connection', socket => {
     // clean up empty rooms
     if (room.players.every(p => !p.connected)) {
       clearTurnTimer(room);
+      clearRoundOverTimer(room);
       delete rooms[room.code];
     } else {
       broadcastState(room);
