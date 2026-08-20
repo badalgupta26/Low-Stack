@@ -161,7 +161,7 @@ function renderLobby(state) {
   document.getElementById('lobby-code').textContent = state.code;
   document.getElementById('lobby-limit').textContent = `${state.players.length}/${state.playerLimit}`;
 
-  const waText = `Join my Least Score game! Room code: ${state.code} — ${window.location.origin}`;
+  const waText = `Join my Low Stack game! Room code: ${state.code} — ${window.location.origin}`;
   document.getElementById('btn-whatsapp').href = `https://wa.me/?text=${encodeURIComponent(waText)}`;
 
   const body = document.getElementById('lobby-players');
@@ -258,9 +258,7 @@ function renderGame(state) {
 
   const hintEl = document.getElementById('declare-hint');
   if (isMyTurn && !state.canDeclare) {
-    hintEl.textContent = state.roundNumber <= 1 && state.movesPlayed === 0
-      ? "You can't declare before anyone has taken a turn."
-      : "You can't declare — you've already played this round.";
+    hintEl.textContent = "You can't declare until every player has taken at least one turn this round.";
   } else {
     hintEl.textContent = '';
   }
