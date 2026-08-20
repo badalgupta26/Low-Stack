@@ -47,10 +47,9 @@ function shuffle(arr) {
 // normal order A=1..K=13, alt order used for Q-K-A style runs (A=14)
 const NORMAL_ORDER = { A: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, 10: 10, J: 11, Q: 12, K: 13 };
 
+// A run only needs consecutive ranks with no duplicates — suits can be mixed.
+// (Q-K-A and A-2-3 both count; K-A-2 does not, since neither ordering of A lines up.)
 function isConsecutiveRun(cards) {
-  const allSameSuit = cards.every(c => c.suit === cards[0].suit);
-  if (!allSameSuit) return false;
-
   const tryOrder = (aValue) => {
     const vals = cards
       .map(c => (c.rank === 'A' ? aValue : NORMAL_ORDER[c.rank]))
@@ -83,7 +82,7 @@ function validateGroup(cards) {
     const allSameRank = cards.every(c => c.rank === cards[0].rank);
     if (allSameRank) return { valid: false, reason: 'Three of a kind cannot be discarded as a group.' };
     if (isConsecutiveRun(cards)) return { valid: true, type: 'run3' };
-    return { valid: false, reason: 'Three cards must be a same-suit sequence (e.g. 2-3-4).' };
+    return { valid: false, reason: 'Three cards must be a sequence (e.g. 2-3-4), any suits.' };
   }
 
   if (cards.length === 4) {
@@ -99,8 +98,9 @@ function validateGroup(cards) {
 
   if (cards.length === 5) {
     const allSameSuit = cards.every(c => c.suit === cards[0].suit);
-    if (allSameSuit) return { valid: true, type: isConsecutiveRun(cards) ? 'run5' : 'flush5' };
-    return { valid: false, reason: 'Five cards must be a same-suit flush (or run).' };
+    if (allSameSuit) return { valid: true, type: 'flush5' };
+    if (isConsecutiveRun(cards)) return { valid: true, type: 'run5' };
+    return { valid: false, reason: 'Five cards must be a same-suit flush, or a sequence (any suits).' };
   }
 
   return { valid: false, reason: 'Invalid number of cards selected.' };
