@@ -75,9 +75,9 @@ function roomStateFor(room, playerId) {
 }
 
 function canPlayerDeclare(room, player) {
-  if (room.movesPlayed === 0) return false; // nobody has taken a turn yet this round
-  if (player.hasPlayedThisRound) return false; // not after you've already played this round
-  return true;
+  const active = activePlayers(room);
+  const everyoneHasMoved = active.every(p => room.playersMovedThisRound && room.playersMovedThisRound.has(p.id));
+  return everyoneHasMoved;
 }
 
 function broadcastState(room) {
@@ -94,6 +94,7 @@ function dealNewRound(room) {
   room.movesPlayed = 0;
   room.lastMoves = {};
   room.lastRoundResult = null;
+  room.playersMovedThisRound = new Set();
 
   for (const p of activePlayers(room)) {
     p.hand = room.deck.splice(0, 5);
@@ -154,6 +155,7 @@ function autoPlayTurn(room) {
   player.hand = player.hand.filter(c => c.id !== lowest.id);
   player.hand.push(pickedCard);
   player.hasPlayedThisRound = true;
+  room.playersMovedThisRound.add(player.id);
 
   room.openPile = [lowest];
   room.openPileOwnerId = player.id;
@@ -211,6 +213,7 @@ io.on('connection', socket => {
         lastRoundResult: null,
         turnDeadline: null,
         turnTimeoutHandle: null,
+        playersMovedThisRound: new Set(),
       };
       rooms[code] = room;
       socket.join(code);
@@ -324,6 +327,7 @@ io.on('connection', socket => {
     room.lastMoves[player.id] = { discarded: discardCards, picked: pickedCard };
     room.movesPlayed += 1;
     player.hasPlayedThisRound = true;
+    room.playersMovedThisRound.add(player.id);
 
     room.currentIndex = nextActiveIndex(room, idx);
     startTurnTimer(room);
@@ -338,12 +342,8 @@ io.on('connection', socket => {
       socket.emit('errorMsg', "It's not your turn.");
       return;
     }
-    if (room.movesPlayed === 0) {
-      socket.emit('errorMsg', 'You cannot declare before anyone has taken a turn.');
-      return;
-    }
-    if (player.hasPlayedThisRound) {
-      socket.emit('errorMsg', 'You cannot declare after already playing this round.');
+    if (!canPlayerDeclare(room, player)) {
+      socket.emit('errorMsg', 'You cannot declare until every player has taken at least one turn this round.');
       return;
     }
 
