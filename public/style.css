@@ -3,60 +3,65 @@ body {
   margin: 0;
   font-family: -apple-system, Helvetica, Arial, sans-serif;
   font-size: 15px;
-  color: #111;
-  background: #fff;
+  color: #e8e8ea;
+  background: linear-gradient(160deg, #1c1d21 0%, #2a2b30 55%, #1f2024 100%);
+  min-height: 100vh;
   padding: 12px 14px 40px;
 }
-h1 { font-size: 19px; margin: 6px 0 8px; display: inline-block; }
-h2 { font-size: 15px; margin: 14px 0 4px; }
-a { color: #1155cc; text-decoration: underline; margin-left: 10px; font-size: 14px; }
+h1 { font-size: 19px; margin: 6px 0 8px; display: inline-block; color: #f2f2f4; }
+h2 { font-size: 15px; margin: 14px 0 4px; color: #d6d6da; }
+a { color: #6ab0ff; text-decoration: underline; margin-left: 10px; font-size: 14px; }
 .hidden { display: none !important; }
 .block { margin-bottom: 14px; }
-label { display: block; font-size: 12px; color: #444; margin-bottom: 3px; }
+label { display: block; font-size: 12px; color: #a7a7ae; margin-bottom: 3px; }
 input, select {
   width: 100%; max-width: 260px; padding: 7px 8px; font-size: 15px;
-  border: 1px solid #999; border-radius: 4px; margin-bottom: 6px;
+  border: 1px solid #55565c; border-radius: 4px; margin-bottom: 6px;
+  background: #2c2d32; color: #eee;
 }
 button {
-  padding: 8px 16px; font-size: 15px; border: 1px solid #888; border-radius: 18px;
-  background: #eee; color: #111; margin: 4px 6px 4px 0; cursor: pointer;
+  padding: 8px 16px; font-size: 15px; border: 1px solid #5a5b62; border-radius: 18px;
+  background: #34353b; color: #f0f0f2; margin: 4px 6px 4px 0; cursor: pointer;
 }
-button:active { background: #ddd; }
+button:active { background: #3f4047; }
 button:disabled { opacity: 0.4; }
-.error { color: #b00020; font-size: 13px; min-height: 16px; }
+.error { color: #ff6b6b; font-size: 13px; min-height: 16px; }
 
 .ptable { border-collapse: collapse; width: 100%; margin-top: 10px; font-size: 13px; }
-.ptable th, .ptable td { border: 1px solid #ccc; padding: 5px 6px; text-align: left; }
-.ptable th { background: #f2f2f2; }
-.ptable tr.me { background: #eaffea; }
-.ptable tr.turn { background: #fff3c4; }
+.ptable th, .ptable td { border: 1px solid #46474d; padding: 5px 6px; text-align: left; }
+.ptable th { background: #2c2d32; color: #cfcfd4; }
+.ptable tr.me { background: #1f3a24; }
+.ptable tr.turn { background: #4a3f14; }
 
 .topbar { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
-.meta { font-size: 13px; color: #333; margin: 2px 0; }
+.meta { font-size: 13px; color: #b7b7bd; margin: 2px 0; }
 
 .table-area { display: flex; align-items: flex-start; justify-content: space-between; margin: 14px 0 6px; }
-.pile-label { font-weight: bold; font-size: 13px; margin-bottom: 4px; }
+.pile-label { font-weight: bold; font-size: 13px; margin-bottom: 4px; color: #cfcfd4; }
 .pile-block { flex: 1; }
 
 .card-row { display: flex; flex-wrap: wrap; gap: 6px; min-height: 64px; align-items: flex-end; }
 
 .card {
   width: 42px; height: 60px; border: 1px solid #333; border-radius: 5px;
-  background: #fff; display: flex; flex-direction: column; align-items: center;
+  background: #ffffff; display: flex; flex-direction: column; align-items: center;
   justify-content: center; font-size: 14px; font-weight: bold; cursor: pointer;
-  user-select: none; box-shadow: 1px 1px 2px rgba(0,0,0,0.15);
+  user-select: none; box-shadow: 1px 1px 4px rgba(0,0,0,0.4);
   transition: transform 0.1s;
 }
 .card.red { color: #c0392b; }
 .card.black { color: #111; }
-.card.selected { transform: translateY(-10px); border-color: #1155cc; border-width: 2px; }
+.card.selected { transform: translateY(-10px); border-color: #6ab0ff; border-width: 2px; }
 .card.back {
-  background: repeating-linear-gradient(45deg, #b00020, #b00020 4px, #d32f2f 4px, #d32f2f 8px);
-  color: #fff; font-size: 22px; cursor: pointer;
+  background: repeating-linear-gradient(45deg, #0d3c78, #0d3c78 4px, #1560b8 4px, #1560b8 8px);
+  color: #fff; font-size: 22px; cursor: pointer; border-color: #0a2c58;
 }
 .card.disabled { opacity: 0.45; cursor: default; }
 
 .hand-block { margin-top: 8px; }
 .actions { margin: 12px 0 6px; }
 
-#meta-turn { font-weight: bold; }
+.summary-lines { font-size: 14px; margin: 6px 0; color: #f0f0f2; }
+.summary-lines div { margin: 2px 0; }
+
+#meta-turn { font-weight: bold; color: #e8e8ea; }
