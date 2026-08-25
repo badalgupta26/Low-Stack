@@ -3,50 +3,68 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-<title>Least Score</title>
+<title>Low Stack</title>
+<link rel="icon" type="image/png" href="logo.png" />
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+
+<div class="watermark" aria-hidden="true">
+  <img src="logo.png" alt="" />
+  <span>LOW STACK</span>
+</div>
 
 <div id="app">
 
   <!-- HOME SCREEN -->
   <section id="screen-home" class="screen">
     <h1>Least Score</h1>
-    <div class="block">
+
+    <!-- Quick-join flow: shown when arriving via a WhatsApp room link -->
+    <div id="quickjoin-block" class="block hidden">
+      <h2>Join Room <span id="qj-code"></span></h2>
       <label>Your name</label>
-      <input id="input-name" type="text" maxlength="16" placeholder="e.g. Cloud" />
+      <input id="qj-name" type="text" maxlength="16" placeholder="e.g. Cloud" />
+      <button id="btn-qj-continue">Continue</button>
+      <p id="qj-error" class="error"></p>
     </div>
 
-    <div class="block">
-      <h2>Create a room</h2>
-      <label>Number of players (2-5)</label>
-      <select id="select-playerlimit">
-        <option value="2">2</option>
-        <option value="3">3</option>
-        <option value="4">4</option>
-        <option value="5" selected>5</option>
-      </select>
-      <label>Max score (elimination)</label>
-      <select id="select-maxscore">
-        <option value="25">25</option>
-        <option value="50" selected>50</option>
-        <option value="100">100</option>
-      </select>
-      <label>Move timer</label>
-      <select id="select-timer">
-        <option value="0" selected>No timer</option>
-        <option value="30">30 seconds</option>
-        <option value="60">60 seconds</option>
-      </select>
-      <button id="btn-create">Create Room</button>
-    </div>
+    <div id="normal-home-blocks">
+      <div class="block">
+        <label>Your name</label>
+        <input id="input-name" type="text" maxlength="16" placeholder="e.g. Cloud" />
+      </div>
 
-    <div class="block">
-      <h2>Join a room</h2>
-      <label>Room code</label>
-      <input id="input-code" type="text" maxlength="4" placeholder="e.g. A7K4" style="text-transform:uppercase" />
-      <button id="btn-join">Join Room</button>
+      <div class="block">
+        <h2>Create a room</h2>
+        <label>Number of players (2-5)</label>
+        <select id="select-playerlimit">
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5" selected>5</option>
+        </select>
+        <label>Max score (elimination)</label>
+        <select id="select-maxscore">
+          <option value="25">25</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+        </select>
+        <label>Move timer</label>
+        <select id="select-timer">
+          <option value="0" selected>No timer</option>
+          <option value="30">30 seconds</option>
+          <option value="60">60 seconds</option>
+        </select>
+        <button id="btn-create">Create Room</button>
+      </div>
+
+      <div class="block">
+        <h2>Join a room</h2>
+        <label>Room code</label>
+        <input id="input-code" type="text" maxlength="4" placeholder="e.g. A7K4" style="text-transform:uppercase" />
+        <button id="btn-join">Join Room</button>
+      </div>
     </div>
 
     <p id="home-error" class="error"></p>
@@ -58,7 +76,7 @@
     <p>Share this code with friends (<span id="lobby-limit"></span> players).</p>
     <a id="btn-whatsapp" href="#" target="_blank" rel="noopener">Share on WhatsApp</a>
     <table class="ptable">
-      <thead><tr><th>Player</th><th>Status</th></tr></thead>
+      <thead><tr><th>Player</th><th>Status</th><th></th></tr></thead>
       <tbody id="lobby-players"></tbody>
     </table>
     <button id="btn-start" class="hidden">Start Game</button>
@@ -101,7 +119,7 @@
     <p id="game-error" class="error"></p>
 
     <table class="ptable">
-      <thead><tr><th>Player</th><th>Discarded</th><th>Picked</th><th>Total</th><th>Rank</th></tr></thead>
+      <thead><tr><th>Player</th><th>Discarded</th><th>Picked</th><th>Total</th><th>Rank</th><th></th></tr></thead>
       <tbody id="score-body"></tbody>
     </table>
     <p id="moves-played"></p>
