@@ -174,6 +174,21 @@ socket.on('errorMsg', (msg) => {
   }
 });
 
+socket.on('kicked', () => {
+  clearSession();
+  roomCode = null;
+  myId = null;
+  latestState = null;
+  for (const k in screens) screens[k].classList.add('hidden');
+  document.getElementById('app').innerHTML = `
+    <section class="screen">
+      <h1>You've been removed</h1>
+      <p>The host has kicked you from this game. The rest of the players continue without you.</p>
+      <a href="${window.location.pathname}">Back to home</a>
+    </section>
+  `;
+});
+
 function render(state) {
   if (state.phase === 'lobby') {
     renderLobby(state);
@@ -342,7 +357,9 @@ function renderOver(state) {
   const declareLineEl = document.getElementById('over-declare-line');
   const summaryEl = document.getElementById('over-summary');
   if (r) {
-    declareLineEl.textContent = `${r.declarerName} declared — ${r.correct ? 'correct!' : 'incorrect declaration (+20 penalty)'}`;
+    declareLineEl.textContent = r.declarerId
+      ? `${r.declarerName} declared — ${r.correct ? 'correct!' : 'incorrect declaration (+20 penalty)'}`
+      : '';
 
     const lines = [];
     if (state.phase === 'gameOver' && r.gameWinnerName) {
