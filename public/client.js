@@ -44,7 +44,90 @@ function clearSession() {
   sessionStorage.removeItem('ls_pid');
 }
 
+// ---------- GOOGLE SIGN-IN ----------
+// Replace this with your own Client ID from Google Cloud Console.
+const GOOGLE_CLIENT_ID = '1052396653922-601rbgj96os9856f5spaphosvee8g1a2.apps.googleusercontent.com';
+
+function decodeJwt(token) {
+  try {
+    const payload = token.split('.')[1];
+    const json = decodeURIComponent(
+      atob(payload.replace(/-/g, '+').replace(/_/g, '/'))
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(json);
+  } catch (e) {
+    return null;
+  }
+}
+
+function handleGoogleCredential(response) {
+  const data = decodeJwt(response.credential);
+  if (!data) return;
+  const profile = { name: data.name, picture: data.picture };
+  localStorage.setItem('ls_google_profile', JSON.stringify(profile));
+  applyGoogleProfile(profile);
+}
+window.handleGoogleCredential = handleGoogleCredential;
+
+function applyGoogleProfile(profile) {
+  const nameInput = document.getElementById('input-name');
+  if (nameInput && !nameInput.value) nameInput.value = profile.name.slice(0, 16);
+  const qjInput = document.getElementById('qj-name');
+  if (qjInput && !qjInput.value) qjInput.value = profile.name.slice(0, 16);
+  renderGoogleBadge('google-badge', profile);
+  renderGoogleBadge('google-badge-qj', profile);
+}
+
+function renderGoogleBadge(elementId, profile) {
+  const badge = document.getElementById(elementId);
+  if (!badge) return;
+  badge.innerHTML = `
+    <img src="${profile.picture}" alt="" class="google-avatar" />
+    <span>Signed in as ${escapeHtml(profile.name)}</span>
+    <a href="#" class="google-signout">Not you?</a>
+  `;
+  badge.classList.remove('hidden');
+  const signinBtn = document.getElementById('google-signin-btn');
+  if (signinBtn) signinBtn.classList.add('hidden');
+  badge.querySelector('.google-signout').addEventListener('click', (e) => {
+    e.preventDefault();
+    localStorage.removeItem('ls_google_profile');
+    document.querySelectorAll('.google-badge').forEach((b) => b.classList.add('hidden'));
+    if (signinBtn) signinBtn.classList.remove('hidden');
+    if (document.getElementById('input-name')) document.getElementById('input-name').value = '';
+    if (document.getElementById('qj-name')) document.getElementById('qj-name').value = '';
+  });
+}
+
+function initGoogleSignIn() {
+  const cached = localStorage.getItem('ls_google_profile');
+  if (cached) {
+    try { applyGoogleProfile(JSON.parse(cached)); } catch (e) { /* ignore */ }
+  }
+  if (GOOGLE_CLIENT_ID.startsWith('YOUR_')) return; // not configured yet
+  if (!window.google || !google.accounts || !google.accounts.id) return;
+
+  google.accounts.id.initialize({
+    client_id: GOOGLE_CLIENT_ID,
+    callback: handleGoogleCredential,
+    auto_select: true,
+  });
+  const btnContainer = document.getElementById('google-signin-btn');
+  if (btnContainer && !cached) {
+    google.accounts.id.renderButton(btnContainer, { theme: 'outline', size: 'medium', shape: 'pill' });
+  }
+}
+
 window.addEventListener('load', () => {
+  initGoogleSignIn();
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => { /* ignore */ });
+  }
+
   const code = sessionStorage.getItem('ls_code');
   const pid = sessionStorage.getItem('ls_pid');
   if (code && pid) {
