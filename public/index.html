@@ -9,6 +9,18 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@700;800&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="style.css" />
+
+<!-- PWA / installable app support -->
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#1c1d21" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Low Stack" />
+<meta name="mobile-web-app-capable" content="yes" />
+
+<!-- Google Sign-In -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 
@@ -30,6 +42,7 @@
     <!-- Quick-join flow: shown when arriving via a WhatsApp room link -->
     <div id="quickjoin-block" class="block hidden">
       <h2>Join Room <span id="qj-code"></span></h2>
+      <div id="google-badge-qj" class="google-badge hidden"></div>
       <label>Your name</label>
       <input id="qj-name" type="text" maxlength="16" placeholder="e.g. Cloud" />
       <button id="btn-qj-continue">Continue</button>
@@ -38,6 +51,8 @@
 
     <div id="normal-home-blocks">
       <div class="block">
+        <div id="google-signin-btn"></div>
+        <div id="google-badge" class="google-badge hidden"></div>
         <label>Your name</label>
         <input id="input-name" type="text" maxlength="16" placeholder="e.g. Cloud" />
       </div>
