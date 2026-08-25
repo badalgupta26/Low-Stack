@@ -81,18 +81,13 @@ button:disabled { opacity: 0.4; }
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  opacity: 0.06;
+  opacity: 0.07;
   overflow: hidden;
 }
-.watermark img {
-  width: 220px;
-  max-width: 55vw;
-  margin-bottom: 6px;
-  filter: grayscale(1) brightness(1.8);
-}
 .watermark span {
-  font-family: 'Bauhaus 93', 'Copperplate', 'Baloo 2', fantasy, sans-serif;
-  font-size: 40px;
+  font-family: 'Baloo 2', 'Arial Black', sans-serif;
+  font-weight: 800;
+  font-size: 46px;
   color: #ffffff;
   letter-spacing: 6px;
   text-align: center;
@@ -101,4 +96,37 @@ button:disabled { opacity: 0.4; }
 #app {
   position: relative;
   z-index: 1;
+}
+
+.brand-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 2px;
+}
+.brand-logo {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+.brand-header h1 {
+  font-family: 'Baloo 2', sans-serif;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+.brand-tagline {
+  font-size: 12px;
+  color: #9a9aa0;
+  margin: 0 0 14px;
+}
+
+.whatsapp-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  vertical-align: middle;
+}
+.whatsapp-link span {
+  text-decoration: underline;
 }
