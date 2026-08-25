@@ -484,7 +484,19 @@ io.on('connection', socket => {
     const target = room.players.find(p => p.id === targetPlayerId);
     if (!target) return;
 
+    // notify the kicked player directly and stop sending them further updates
+    const notifyAndDisconnect = () => {
+      if (target.socketId) {
+        io.to(target.socketId).emit('kicked');
+        const targetSocket = io.sockets.sockets.get(target.socketId);
+        if (targetSocket) targetSocket.leave(room.code);
+      }
+      target.socketId = null;
+      target.connected = false;
+    };
+
     if (room.phase === 'lobby') {
+      notifyAndDisconnect();
       room.players = room.players.filter(p => p.id !== targetPlayerId);
       broadcastState(room);
       return;
@@ -494,7 +506,7 @@ io.on('connection', socket => {
 
     const wasCurrent = room.phase === 'playing' && room.players[room.currentIndex] && room.players[room.currentIndex].id === targetPlayerId;
     target.active = false;
-    target.connected = false;
+    notifyAndDisconnect();
 
     const stillActive = activePlayers(room);
     if (stillActive.length <= 1 && (room.phase === 'playing' || room.phase === 'roundOver')) {
