@@ -13,6 +13,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const PORT = process.env.PORT || 3000;
 const MAX_PLAYERS = 5;
 const MIN_PLAYERS = 2;
+const EMPTY_ROOM_GRACE_MS = 10 * 60 * 1000; // keep an empty/all-disconnected room alive for 10 minutes
 
 /** rooms[code] = {
  *   code, maxScore, hostId, phase: 'lobby'|'playing'|'roundOver'|'gameOver',
@@ -101,6 +102,12 @@ function dealNewRound(room) {
   for (const p of activePlayers(room)) {
     p.hand = room.deck.splice(0, 5);
     p.hasPlayedThisRound = false;
+  }
+  // place one random card face-up on the table so the first player has an
+  // open-pile option in addition to the closed deck
+  if (room.deck.length > 0) {
+    room.openPile = room.deck.splice(0, 1);
+    room.openPileOwnerId = null;
   }
   // rotate who starts each round among the currently active players
   const active = activePlayers(room);
@@ -246,6 +253,7 @@ io.on('connection', socket => {
         roundStartPos: 0,
         roundOverDeadline: null,
         roundOverTimeoutHandle: null,
+        emptyRoomTimeoutHandle: null,
       };
       rooms[code] = room;
       socket.join(code);
@@ -269,6 +277,10 @@ io.on('connection', socket => {
     socket.join(room.code);
     socket.data.roomCode = room.code;
     socket.data.playerId = playerId;
+    if (room.emptyRoomTimeoutHandle) {
+      clearTimeout(room.emptyRoomTimeoutHandle);
+      room.emptyRoomTimeoutHandle = null;
+    }
     cb({ ok: true, code: room.code, playerId });
     broadcastState(room);
   });
@@ -283,6 +295,10 @@ io.on('connection', socket => {
     socket.join(room.code);
     socket.data.roomCode = room.code;
     socket.data.playerId = playerId;
+    if (room.emptyRoomTimeoutHandle) {
+      clearTimeout(room.emptyRoomTimeoutHandle);
+      room.emptyRoomTimeoutHandle = null;
+    }
     cb({ ok: true, code: room.code, playerId });
     broadcastState(room);
   });
@@ -457,6 +473,46 @@ io.on('connection', socket => {
     broadcastState(room);
   });
 
+  socket.on('kickPlayer', ({ targetPlayerId }) => {
+    const room = rooms[socket.data.roomCode];
+    if (!room) return;
+    if (socket.data.playerId !== room.hostId) return; // host only
+    if (targetPlayerId === room.hostId) {
+      socket.emit('errorMsg', "You can't kick yourself.");
+      return;
+    }
+    const target = room.players.find(p => p.id === targetPlayerId);
+    if (!target) return;
+
+    if (room.phase === 'lobby') {
+      room.players = room.players.filter(p => p.id !== targetPlayerId);
+      broadcastState(room);
+      return;
+    }
+
+    if (!target.active) return; // already out of the game
+
+    const wasCurrent = room.phase === 'playing' && room.players[room.currentIndex] && room.players[room.currentIndex].id === targetPlayerId;
+    target.active = false;
+    target.connected = false;
+
+    const stillActive = activePlayers(room);
+    if (stillActive.length <= 1 && (room.phase === 'playing' || room.phase === 'roundOver')) {
+      clearTurnTimer(room);
+      clearRoundOverTimer(room);
+      room.phase = 'gameOver';
+      if (!room.lastRoundResult) {
+        room.lastRoundResult = { declarerId: null, declarerName: null, correct: null, results: [], roundWinnerName: null, roundLoserName: null, eliminated: [] };
+      }
+      room.lastRoundResult.eliminated = (room.lastRoundResult.eliminated || []).concat([{ id: target.id, name: target.name, cumulative: target.cumulative }]);
+      room.lastRoundResult.gameWinnerName = stillActive.length === 1 ? stillActive[0].name : null;
+    } else if (wasCurrent) {
+      room.currentIndex = nextActiveIndex(room, room.currentIndex);
+      startTurnTimer(room);
+    }
+    broadcastState(room);
+  });
+
   socket.on('leaveRoom', () => {
     handleDisconnect(socket);
   });
@@ -473,11 +529,19 @@ io.on('connection', socket => {
       player.connected = false;
       player.socketId = null;
     }
-    // clean up empty rooms
+    // keep an empty/fully-disconnected room around for a grace period instead
+    // of deleting it instantly, so a brief refresh or a host closing one tab
+    // doesn't wipe out the room code for everyone else.
     if (room.players.every(p => !p.connected)) {
-      clearTurnTimer(room);
-      clearRoundOverTimer(room);
-      delete rooms[room.code];
+      if (room.emptyRoomTimeoutHandle) clearTimeout(room.emptyRoomTimeoutHandle);
+      room.emptyRoomTimeoutHandle = setTimeout(() => {
+        const r = rooms[room.code];
+        if (r && r.players.every(p => !p.connected)) {
+          clearTurnTimer(r);
+          clearRoundOverTimer(r);
+          delete rooms[r.code];
+        }
+      }, EMPTY_ROOM_GRACE_MS);
     } else {
       broadcastState(room);
     }
