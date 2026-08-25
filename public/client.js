@@ -54,10 +54,38 @@ window.addEventListener('load', () => {
         myId = res.playerId;
       } else {
         clearSession();
+        checkQuickJoin();
       }
     });
+  } else {
+    checkQuickJoin();
   }
 });
+
+// ---------- QUICK JOIN (via WhatsApp link with ?room=CODE) ----------
+function checkQuickJoin() {
+  const params = new URLSearchParams(window.location.search);
+  const roomParam = (params.get('room') || '').toUpperCase();
+  if (!roomParam) return;
+  document.getElementById('normal-home-blocks').classList.add('hidden');
+  document.getElementById('quickjoin-block').classList.remove('hidden');
+  document.getElementById('qj-code').textContent = roomParam;
+
+  document.getElementById('btn-qj-continue').addEventListener('click', () => {
+    const name = document.getElementById('qj-name').value.trim() || 'Player';
+    socket.emit('joinRoom', { name, code: roomParam }, (res) => {
+      if (!res.ok) {
+        document.getElementById('qj-error').textContent = res.error || 'Could not join that room.';
+        return;
+      }
+      roomCode = res.code;
+      myId = res.playerId;
+      saveSession();
+      // clean the URL so a refresh doesn't re-trigger quick join
+      window.history.replaceState({}, '', window.location.pathname);
+    });
+  });
+}
 
 // ---------- HOME ----------
 document.getElementById('btn-create').addEventListener('click', () => {
@@ -163,18 +191,28 @@ function renderLobby(state) {
   document.getElementById('lobby-code').textContent = state.code;
   document.getElementById('lobby-limit').textContent = `${state.players.length}/${state.playerLimit}`;
 
-  const waText = `Join my Low Stack game! Room code: ${state.code} — ${window.location.origin}`;
+  const joinUrl = `${window.location.origin}${window.location.pathname}?room=${state.code}`;
+  const waText = `Join my Low Stack game! Tap this link, enter your name, and you're in: ${joinUrl}`;
   document.getElementById('btn-whatsapp').href = `https://wa.me/?text=${encodeURIComponent(waText)}`;
 
   const body = document.getElementById('lobby-players');
   body.innerHTML = '';
+  const isHost = state.myId === state.hostId;
   state.players.forEach(p => {
     const tr = document.createElement('tr');
     if (p.id === state.myId) tr.classList.add('me');
-    tr.innerHTML = `<td>${escapeHtml(p.name)}${p.id === state.hostId ? ' (host)' : ''}</td><td>${p.connected ? 'Ready' : 'Disconnected'}</td>`;
+    const kickCell = (isHost && p.id !== state.myId)
+      ? `<td><button class="kick-btn" data-kick="${p.id}">Kick</button></td>`
+      : '<td></td>';
+    tr.innerHTML = `<td>${escapeHtml(p.name)}${p.id === state.hostId ? ' (host)' : ''}</td><td>${p.connected ? 'Ready' : 'Disconnected'}</td>${kickCell}`;
     body.appendChild(tr);
   });
-  const isHost = state.myId === state.hostId;
+  body.querySelectorAll('[data-kick]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!window.confirm('Remove this player from the room?')) return;
+      socket.emit('kickPlayer', { targetPlayerId: btn.dataset.kick });
+    });
+  });
   const startBtn = document.getElementById('btn-start');
   startBtn.classList.toggle('hidden', !isHost);
   startBtn.disabled = state.players.length < 2;
@@ -268,6 +306,7 @@ function renderGame(state) {
   // Score table
   const body = document.getElementById('score-body');
   body.innerHTML = '';
+  const isHostInGame = state.myId === state.hostId;
   const ranked = state.players
     .map(p => ({ ...p }))
     .sort((a, b) => a.cumulative - b.cumulative);
@@ -279,8 +318,17 @@ function renderGame(state) {
     const discardedTxt = lm ? lm.discarded.map(c => c.rank + suitChar(c.suit)).join(' ') : '';
     const pickedTxt = lm ? (lm.pickedSource === 'deck' ? '🂠 deck' : lm.picked.rank + suitChar(lm.picked.suit)) : '';
     const rank = ranked.findIndex(r => r.id === p.id) + 1;
-    tr.innerHTML = `<td>${escapeHtml(p.name)}${p.active ? '' : ' (out)'}</td><td>${discardedTxt}</td><td>${pickedTxt}</td><td>${p.cumulative}</td><td>${rank}</td>`;
+    const kickCell = (isHostInGame && p.id !== state.myId && p.active)
+      ? `<td><button class="kick-btn" data-kick="${p.id}">Kick</button></td>`
+      : '<td></td>';
+    tr.innerHTML = `<td>${escapeHtml(p.name)}${p.active ? '' : ' (out)'}</td><td>${discardedTxt}</td><td>${pickedTxt}</td><td>${p.cumulative}</td><td>${rank}</td>${kickCell}`;
     body.appendChild(tr);
+  });
+  body.querySelectorAll('[data-kick]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!window.confirm('Remove this player from the game? They will be treated as eliminated.')) return;
+      socket.emit('kickPlayer', { targetPlayerId: btn.dataset.kick });
+    });
   });
 
   document.getElementById('moves-played').textContent = `Moves played: ${state.movesPlayed}`;
