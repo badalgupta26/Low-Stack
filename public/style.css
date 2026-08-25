@@ -72,6 +72,33 @@ button:disabled { opacity: 0.4; }
 }
 .kick-btn:active { background: #5c2a2f; }
 
+.google-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #d6d6da;
+  margin-bottom: 10px;
+  background: #26272c;
+  border: 1px solid #3c3d43;
+  border-radius: 20px;
+  padding: 4px 10px 4px 4px;
+  width: fit-content;
+}
+.google-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.google-badge .google-signout {
+  margin-left: 2px;
+  font-size: 12px;
+}
+#google-signin-btn {
+  margin-bottom: 10px;
+}
+
 .watermark {
   position: fixed;
   inset: 0;
