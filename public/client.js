@@ -210,6 +210,21 @@ document.getElementById('btn-leave-lobby').addEventListener('click', (e) => {
 // ---------- GAME ----------
 document.getElementById('btn-refresh').addEventListener('click', (e) => { e.preventDefault(); location.reload(); });
 document.getElementById('btn-quit').addEventListener('click', (e) => { e.preventDefault(); leaveGame(); });
+document.getElementById('btn-rules').addEventListener('click', (e) => { e.preventDefault(); openRulesModal(); });
+
+// ---------- HOW TO PLAY MODAL ----------
+function openRulesModal() {
+  document.getElementById('rules-modal').classList.remove('hidden');
+}
+function closeRulesModal() {
+  document.getElementById('rules-modal').classList.add('hidden');
+}
+document.getElementById('btn-how-to-play').addEventListener('click', (e) => { e.preventDefault(); openRulesModal(); });
+document.getElementById('btn-how-to-play-lobby').addEventListener('click', (e) => { e.preventDefault(); openRulesModal(); });
+document.getElementById('btn-close-rules').addEventListener('click', (e) => { e.preventDefault(); closeRulesModal(); });
+document.getElementById('rules-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'rules-modal') closeRulesModal();
+});
 
 document.getElementById('btn-move').addEventListener('click', () => {
   clearGameError();
