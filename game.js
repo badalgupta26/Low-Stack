@@ -5,8 +5,8 @@
 //  - A = 1, number cards = face value, J/Q/K = 10
 //  - On a turn: discard a valid group, then pick 1 card (from the pile the
 //    previous player just discarded, or from the closed deck)
-//  - Valid discard groups: single card, pair (2 same rank), two-pair/four of a
-//    kind (4 cards), 3-card same-suit run, 5-card same-suit run, 5-card flush
+//  - Valid discard groups: single card, pair (2 same rank), 3-card sequence,
+//    5-card sequence, or 5-card same-suit flush
 //  - 3-of-a-kind (same rank, different suit, not a run) is NOT a valid group
 //  - Ace can complete A-2-3 or Q-K-A, but not K-A-2
 //  - Declare: if your hand score is the lowest, you score 0 and everyone
@@ -86,14 +86,7 @@ function validateGroup(cards) {
   }
 
   if (cards.length === 4) {
-    const counts = {};
-    for (const c of cards) counts[c.rank] = (counts[c.rank] || 0) + 1;
-    const countVals = Object.values(counts);
-    const isTwoPairs =
-      (countVals.length === 1 && countVals[0] === 4) || // four of a kind
-      (countVals.length === 2 && countVals.every(v => v === 2)); // two distinct pairs
-    if (isTwoPairs) return { valid: true, type: 'twoPairs' };
-    return { valid: false, reason: 'Four cards must be two pairs (or four of a kind).' };
+    return { valid: false, reason: 'Four cards is not a valid group. Use a pair (2), a sequence (3 or 5), or a flush (5).' };
   }
 
   if (cards.length === 5) {
