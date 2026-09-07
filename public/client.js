@@ -32,15 +32,17 @@ function cardEl(card, { selectable = false, selected = false, disabled = false, 
   return el;
 }
 
-// Small inline card/deck chips used inside the score table's Discarded/Picked columns.
+// Small inline colored text (no boxes) used inside the score table's
+// Discarded/Picked columns and the round-over Hand column — keeps rows
+// compact on mobile while still color-coding suits.
 function miniCardHtml(card) {
-  return `<span class="mini-card ${suitColor(card.suit)}">${card.rank}${suitChar(card.suit)}</span>`;
+  return `<span class="mini-text ${suitColor(card.suit)}">${card.rank}${suitChar(card.suit)}</span>`;
 }
 function miniDeckHtml() {
-  return `<span class="mini-card mini-deck">🂠</span>`;
+  return `<span class="mini-text mini-deck-text">Deck</span>`;
 }
 function miniGroupHtml(cards) {
-  return `<span class="mini-card-group">${cards.map(miniCardHtml).join('')}</span>`;
+  return `<span class="mini-text-group">${cards.map(miniCardHtml).join('')}</span>`;
 }
 
 // ---------- persistence for refresh / rejoin ----------
