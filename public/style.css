@@ -54,8 +54,8 @@ button:disabled { opacity: 0.4; }
 .card.black { color: #111; }
 .card.selected { transform: translateY(-10px); border-color: #6ab0ff; border-width: 2px; }
 .card.back {
-  background: repeating-linear-gradient(45deg, #0a5c3c, #0a5c3c 4px, #12894f 4px, #12894f 8px);
-  color: #fff; font-size: 22px; cursor: pointer; border-color: #063d28;
+  background: repeating-linear-gradient(45deg, #0d3c78, #0d3c78 4px, #1560b8 4px, #1560b8 8px);
+  color: #fff; font-size: 22px; cursor: pointer; border-color: #0a2c58;
 }
 .card.disabled { opacity: 0.45; cursor: default; }
 
@@ -89,9 +89,9 @@ button:disabled { opacity: 0.4; }
 .mini-card.red { color: #c0392b; }
 .mini-card.black { color: #111; }
 .mini-card.mini-deck {
-  background: repeating-linear-gradient(45deg, #0a5c3c, #0a5c3c 3px, #12894f 3px, #12894f 6px);
+  background: repeating-linear-gradient(45deg, #0d3c78, #0d3c78 3px, #1560b8 3px, #1560b8 6px);
   color: #fff;
-  border-color: #063d28;
+  border-color: #0a2c58;
   font-size: 14px;
 }
 
