@@ -123,12 +123,17 @@
     <div class="meta" id="meta-turn"></div>
     <div class="meta" id="meta-timer"></div>
 
+    <div id="knocked-out-banner" class="knocked-out-banner hidden">
+      🚫 You've been knocked out — your score reached the limit.
+      <div class="knocked-out-sub">You can still watch the rest of the game below.</div>
+    </div>
+
     <div class="table-area">
       <div class="pile-block">
         <div class="pile-label">Table</div>
         <div id="open-pile" class="card-row"></div>
       </div>
-      <div class="pile-block">
+      <div class="pile-block deck-block">
         <div class="pile-label">Deck</div>
         <div id="deck-card" class="card back">🂠</div>
       </div>
@@ -159,7 +164,7 @@
     <p id="over-declare-line"></p>
     <div id="over-summary" class="summary-lines"></div>
     <table class="ptable">
-      <thead><tr><th>Player</th><th>Round</th><th>Total</th><th>Rank</th></tr></thead>
+      <thead><tr><th>Player</th><th>Hand</th><th>Round</th><th>Total</th><th>Rank</th></tr></thead>
       <tbody id="over-body"></tbody>
     </table>
     <p id="over-countdown" class="meta"></p>
