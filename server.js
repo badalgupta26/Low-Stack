@@ -103,6 +103,11 @@ function dealNewRound(room) {
     p.hand = room.deck.splice(0, 5);
     p.hasPlayedThisRound = false;
   }
+  // clear out any eliminated/inactive players' old hand so their screen
+  // doesn't keep showing stale cards from a round they're no longer in
+  for (const p of room.players) {
+    if (!p.active) p.hand = [];
+  }
   // place one random card face-up on the table so the first player has an
   // open-pile option in addition to the closed deck
   if (room.deck.length > 0) {
@@ -434,7 +439,7 @@ io.on('connection', socket => {
 
     const stillActive = activePlayers(room);
     const rankSorted = active
-      .map(p => ({ id: p.id, name: p.name, roundScore: scores[p.id], cumulative: p.cumulative }))
+      .map(p => ({ id: p.id, name: p.name, roundScore: scores[p.id], cumulative: p.cumulative, hand: p.hand.map(c => ({ rank: c.rank, suit: c.suit, value: c.value })) }))
       .sort((a, b) => a.cumulative - b.cumulative)
       .map((r, i) => ({ ...r, rank: i + 1 }));
 
