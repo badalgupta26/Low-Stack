@@ -32,6 +32,17 @@ function cardEl(card, { selectable = false, selected = false, disabled = false, 
   return el;
 }
 
+// Small inline card/deck chips used inside the score table's Discarded/Picked columns.
+function miniCardHtml(card) {
+  return `<span class="mini-card ${suitColor(card.suit)}">${card.rank}${suitChar(card.suit)}</span>`;
+}
+function miniDeckHtml() {
+  return `<span class="mini-card mini-deck">🂠</span>`;
+}
+function miniGroupHtml(cards) {
+  return `<span class="mini-card-group">${cards.map(miniCardHtml).join('')}</span>`;
+}
+
 // ---------- persistence for refresh / rejoin ----------
 function saveSession() {
   if (roomCode && myId) {
@@ -339,11 +350,19 @@ function renderGame(state) {
   document.getElementById('meta-maxscore').textContent = state.maxScore;
   document.getElementById('meta-deck').textContent = state.deckCount;
 
-  const isMyTurn = state.currentPlayerId === state.myId;
+  const me = state.players.find(p => p.id === state.myId);
+  const iAmOut = !!(me && !me.active);
+
+  document.getElementById('knocked-out-banner').classList.toggle('hidden', !iAmOut);
+  document.querySelector('.hand-block').classList.toggle('hidden', iAmOut);
+  document.querySelector('.actions').classList.toggle('hidden', iAmOut);
+  document.getElementById('declare-hint').classList.toggle('hidden', iAmOut);
+
+  const isMyTurn = !iAmOut && state.currentPlayerId === state.myId;
   const currentPlayer = state.players.find(p => p.id === state.currentPlayerId);
-  document.getElementById('meta-turn').textContent = isMyTurn
-    ? 'Your turn'
-    : `Current player: ${currentPlayer ? currentPlayer.name : ''}`;
+  document.getElementById('meta-turn').textContent = iAmOut
+    ? ''
+    : (isMyTurn ? 'Your turn' : `Current player: ${currentPlayer ? currentPlayer.name : ''}`);
 
   renderTimer(state);
 
@@ -428,8 +447,8 @@ function renderGame(state) {
     if (p.id === state.myId) tr.classList.add('me');
     if (p.id === state.currentPlayerId) tr.classList.add('turn');
     const lm = state.lastMoves && state.lastMoves[p.id];
-    const discardedTxt = lm ? lm.discarded.map(c => c.rank + suitChar(c.suit)).join(' ') : '';
-    const pickedTxt = lm ? (lm.pickedSource === 'deck' ? '🂠 deck' : lm.picked.rank + suitChar(lm.picked.suit)) : '';
+    const discardedTxt = lm ? miniGroupHtml(lm.discarded) : '';
+    const pickedTxt = lm ? (lm.pickedSource === 'deck' ? miniDeckHtml() : miniCardHtml(lm.picked)) : '';
     const rank = ranked.findIndex(r => r.id === p.id) + 1;
     const kickCell = (isHostInGame && p.id !== state.myId && p.active)
       ? `<td><button class="kick-btn" data-kick="${p.id}">Kick</button></td>`
@@ -481,7 +500,8 @@ function renderOver(state) {
     r.results.forEach(row => {
       const tr = document.createElement('tr');
       if (row.id === state.myId) tr.classList.add('me');
-      tr.innerHTML = `<td>${escapeHtml(row.name)}</td><td>${row.roundScore}</td><td>${row.cumulative}</td><td>${row.rank}</td>`;
+      const handTxt = (row.hand && row.hand.length > 0) ? miniGroupHtml(row.hand) : '';
+      tr.innerHTML = `<td>${escapeHtml(row.name)}</td><td>${handTxt}</td><td>${row.roundScore}</td><td>${row.cumulative}</td><td>${row.rank}</td>`;
       body.appendChild(tr);
     });
   }
