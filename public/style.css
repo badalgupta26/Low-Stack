@@ -4,7 +4,7 @@ body {
   font-family: -apple-system, Helvetica, Arial, sans-serif;
   font-size: 15px;
   color: #e8e8ea;
-  background: linear-gradient(160deg, #1c1d21 0%, #2a2b30 55%, #1f2024 100%);
+  background: linear-gradient(160deg, #0a2e22 0%, #123c2c 45%, #0d3327 75%, #081f18 100%);
   min-height: 100vh;
   padding: 12px 14px 40px;
 }
@@ -36,11 +36,12 @@ button:disabled { opacity: 0.4; }
 .topbar { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
 .meta { font-size: 13px; color: #b7b7bd; margin: 2px 0; }
 
-.table-area { display: flex; align-items: flex-start; justify-content: space-between; margin: 14px 0 6px; }
+.table-area { display: flex; align-items: flex-start; gap: 10px; margin: 14px 0 6px; }
 .pile-label { font-weight: bold; font-size: 13px; margin-bottom: 4px; color: #cfcfd4; }
-.pile-block { flex: 1; }
+.pile-block { flex: 1 1 auto; min-width: 0; }
+.pile-block.deck-block { flex: 0 0 auto; }
 
-.card-row { display: flex; flex-wrap: wrap; gap: 6px; min-height: 64px; align-items: flex-end; }
+.card-row { display: flex; flex-wrap: wrap; gap: 4px; min-height: 64px; align-items: flex-end; }
 
 .card {
   width: 42px; height: 60px; border: 1px solid #333; border-radius: 5px;
@@ -53,8 +54,8 @@ button:disabled { opacity: 0.4; }
 .card.black { color: #111; }
 .card.selected { transform: translateY(-10px); border-color: #6ab0ff; border-width: 2px; }
 .card.back {
-  background: repeating-linear-gradient(45deg, #0d3c78, #0d3c78 4px, #1560b8 4px, #1560b8 8px);
-  color: #fff; font-size: 22px; cursor: pointer; border-color: #0a2c58;
+  background: repeating-linear-gradient(45deg, #0a5c3c, #0a5c3c 4px, #12894f 4px, #12894f 8px);
+  color: #fff; font-size: 22px; cursor: pointer; border-color: #063d28;
 }
 .card.disabled { opacity: 0.45; cursor: default; }
 
@@ -65,6 +66,51 @@ button:disabled { opacity: 0.4; }
 .summary-lines div { margin: 2px 0; }
 
 #meta-turn { font-weight: bold; color: #e8e8ea; }
+
+.mini-card-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+.mini-card {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 32px;
+  border-radius: 3px;
+  border: 1px solid #333;
+  background: #ffffff;
+  color: #111;
+  font-size: 10px;
+  font-weight: bold;
+  line-height: 1;
+}
+.mini-card.red { color: #c0392b; }
+.mini-card.black { color: #111; }
+.mini-card.mini-deck {
+  background: repeating-linear-gradient(45deg, #0a5c3c, #0a5c3c 3px, #12894f 3px, #12894f 6px);
+  color: #fff;
+  border-color: #063d28;
+  font-size: 14px;
+}
+
+.knocked-out-banner {
+  background: #3a1f1f;
+  border: 1px solid #6b2f2f;
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 10px 0;
+  color: #ffb3b8;
+  font-size: 14px;
+  font-weight: 600;
+}
+.knocked-out-sub {
+  font-size: 12px;
+  font-weight: 400;
+  color: #d6a5a8;
+  margin-top: 3px;
+}
 
 .kick-btn {
   padding: 3px 9px; font-size: 11px; border-radius: 12px; margin: 0;
