@@ -100,6 +100,48 @@ button:disabled { opacity: 0.4; }
   margin-top: 3px;
 }
 
+.room-code-meta {
+  background: rgba(224, 164, 88, 0.14);
+  border: 1px solid rgba(224, 164, 88, 0.35);
+  border-radius: 8px;
+  padding: 6px 10px;
+  margin: 8px 0;
+  color: #f0e0c0;
+}
+.room-code-meta strong {
+  color: #e0a458;
+  font-size: 15px;
+  letter-spacing: 1px;
+}
+
+.reconnect-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 30;
+  background: #5c2a2f;
+  color: #ffe3e3;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 10px;
+}
+
+.kickvote-banner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 25;
+  background: rgba(224, 164, 88, 0.95);
+  color: #2b2110;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 12px;
+}
+
 .kick-btn {
   padding: 3px 9px; font-size: 11px; border-radius: 12px; margin: 0;
   background: #4a2226; border-color: #7a3338; color: #ffb3b8;
