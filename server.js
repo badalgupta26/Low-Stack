@@ -73,6 +73,7 @@ function roomStateFor(room, playerId) {
     myId: playerId,
     lastMoves: room.lastMoves,
     lastRoundResult: room.lastRoundResult,
+    pendingKick: publicPendingKick(room),
   };
 }
 
@@ -227,6 +228,81 @@ function ensureDeck(room, count) {
   }
 }
 
+const KICK_VOTE_SECONDS = 30;
+
+// Notifies the removed player directly, disconnects their socket from the
+// room, and — if the game is in progress — advances the turn / checks for
+// game-over the same way an elimination would.
+function performKick(room, targetPlayerId) {
+  const target = room.players.find(p => p.id === targetPlayerId);
+  if (!target) return;
+
+  const notifyAndDisconnect = () => {
+    if (target.socketId) {
+      io.to(target.socketId).emit('kicked');
+      const targetSocket = io.sockets.sockets.get(target.socketId);
+      if (targetSocket) targetSocket.leave(room.code);
+    }
+    target.socketId = null;
+    target.connected = false;
+  };
+
+  if (room.phase === 'lobby') {
+    notifyAndDisconnect();
+    room.players = room.players.filter(p => p.id !== targetPlayerId);
+    // host migration in case the target happened to be host in the lobby
+    if (room.hostId === targetPlayerId) {
+      const nextHost = room.players.find(p => p.connected) || room.players[0];
+      if (nextHost) room.hostId = nextHost.id;
+    }
+    return;
+  }
+
+  if (!target.active) return; // already out
+
+  const wasCurrent = room.phase === 'playing' && room.players[room.currentIndex] && room.players[room.currentIndex].id === targetPlayerId;
+  const wasHost = room.hostId === targetPlayerId;
+  target.active = false;
+  notifyAndDisconnect();
+
+  if (wasHost) {
+    const nextHost = room.players.find(p => p.connected && p.active && p.id !== targetPlayerId) || room.players.find(p => p.connected && p.id !== targetPlayerId);
+    if (nextHost) room.hostId = nextHost.id;
+  }
+
+  const stillActive = activePlayers(room);
+  if (stillActive.length <= 1 && (room.phase === 'playing' || room.phase === 'roundOver')) {
+    clearTurnTimer(room);
+    clearRoundOverTimer(room);
+    room.phase = 'gameOver';
+    if (!room.lastRoundResult) {
+      room.lastRoundResult = { declarerId: null, declarerName: null, correct: null, results: [], roundWinnerName: null, roundLoserName: null, eliminated: [] };
+    }
+    room.lastRoundResult.eliminated = (room.lastRoundResult.eliminated || []).concat([{ id: target.id, name: target.name, cumulative: target.cumulative }]);
+    room.lastRoundResult.gameWinnerName = stillActive.length === 1 ? stillActive[0].name : null;
+  } else if (wasCurrent) {
+    room.currentIndex = nextActiveIndex(room, room.currentIndex);
+    startTurnTimer(room);
+  }
+}
+
+function clearPendingKickTimer(room) {
+  if (room.pendingKick && room.pendingKick.timeoutHandle) {
+    clearTimeout(room.pendingKick.timeoutHandle);
+  }
+}
+
+function cancelPendingKick(room) {
+  clearPendingKickTimer(room);
+  room.pendingKick = null;
+}
+
+function publicPendingKick(room) {
+  if (!room.pendingKick) return null;
+  const { targetId, targetName, initiatorId, initiatorName, requiredVoterIds, votes, deadline } = room.pendingKick;
+  return { targetId, targetName, initiatorId, initiatorName, requiredVoterIds, votes, deadline };
+}
+
 io.on('connection', socket => {
   socket.data.roomCode = null;
   socket.data.playerId = null;
@@ -259,6 +335,7 @@ io.on('connection', socket => {
         roundOverDeadline: null,
         roundOverTimeoutHandle: null,
         emptyRoomTimeoutHandle: null,
+        pendingKick: null,
       };
       rooms[code] = room;
       socket.join(code);
@@ -274,11 +351,40 @@ io.on('connection', socket => {
   socket.on('joinRoom', ({ name, code }, cb) => {
     const room = rooms[(code || '').toUpperCase()];
     if (!room) return cb({ ok: false, error: 'Room not found.' });
-    if (room.phase !== 'lobby') return cb({ ok: false, error: 'Game already in progress.' });
+    const trimmedName = (name || 'Player').trim().slice(0, 16);
+
+    if (room.phase !== 'lobby') {
+      // Game already started — try to resume a disconnected player with a
+      // matching name instead of flatly rejecting. This is what lets someone
+      // get back into an in-progress game from any device using just the
+      // room code and the name they originally joined with.
+      const match = room.players.find(
+        p => !p.connected && p.name.toLowerCase() === trimmedName.toLowerCase()
+      );
+      if (match) {
+        match.socketId = socket.id;
+        match.connected = true;
+        socket.join(room.code);
+        socket.data.roomCode = room.code;
+        socket.data.playerId = match.id;
+        if (room.emptyRoomTimeoutHandle) {
+          clearTimeout(room.emptyRoomTimeoutHandle);
+          room.emptyRoomTimeoutHandle = null;
+        }
+        cb({ ok: true, code: room.code, playerId: match.id });
+        broadcastState(room);
+        return;
+      }
+      return cb({
+        ok: false,
+        error: 'Game already in progress. Use the exact name you joined with to resume, or wait for the next round.',
+      });
+    }
+
     if (room.players.length >= room.playerLimit) return cb({ ok: false, error: `Room is full (max ${room.playerLimit} players).` });
 
     const playerId = 'p_' + Math.random().toString(36).slice(2, 9);
-    room.players.push({ id: playerId, name: (name || 'Player').slice(0, 16), socketId: socket.id, connected: true, hand: [], cumulative: 0, active: true, hasPlayedThisRound: false });
+    room.players.push({ id: playerId, name: trimmedName, socketId: socket.id, connected: true, hand: [], cumulative: 0, active: true, hasPlayedThisRound: false });
     socket.join(room.code);
     socket.data.roomCode = room.code;
     socket.data.playerId = playerId;
@@ -478,54 +584,76 @@ io.on('connection', socket => {
     broadcastState(room);
   });
 
-  socket.on('kickPlayer', ({ targetPlayerId }) => {
+  socket.on('requestKick', ({ targetPlayerId }) => {
     const room = rooms[socket.data.roomCode];
     if (!room) return;
-    if (socket.data.playerId !== room.hostId) return; // host only
-    if (targetPlayerId === room.hostId) {
+    const initiator = room.players.find(p => p.id === socket.data.playerId);
+    if (!initiator) return;
+    if (targetPlayerId === initiator.id) {
       socket.emit('errorMsg', "You can't kick yourself.");
       return;
     }
     const target = room.players.find(p => p.id === targetPlayerId);
-    if (!target) return;
+    if (!target || (room.phase !== 'lobby' && !target.active)) return;
+    if (room.pendingKick) {
+      socket.emit('errorMsg', 'A kick vote is already in progress.');
+      return;
+    }
 
-    // notify the kicked player directly and stop sending them further updates
-    const notifyAndDisconnect = () => {
-      if (target.socketId) {
-        io.to(target.socketId).emit('kicked');
-        const targetSocket = io.sockets.sockets.get(target.socketId);
-        if (targetSocket) targetSocket.leave(room.code);
-      }
-      target.socketId = null;
-      target.connected = false;
-    };
+    // Everyone currently connected (in the lobby) or connected-and-active
+    // (mid-game) other than the initiator and the target must agree.
+    const eligible = room.players.filter(p => {
+      if (p.id === initiator.id || p.id === targetPlayerId) return false;
+      if (room.phase === 'lobby') return p.connected;
+      return p.connected && p.active;
+    });
 
-    if (room.phase === 'lobby') {
-      notifyAndDisconnect();
-      room.players = room.players.filter(p => p.id !== targetPlayerId);
+    if (eligible.length === 0) {
+      // nobody else needs to weigh in — just do it
+      performKick(room, targetPlayerId);
       broadcastState(room);
       return;
     }
 
-    if (!target.active) return; // already out of the game
-
-    const wasCurrent = room.phase === 'playing' && room.players[room.currentIndex] && room.players[room.currentIndex].id === targetPlayerId;
-    target.active = false;
-    notifyAndDisconnect();
-
-    const stillActive = activePlayers(room);
-    if (stillActive.length <= 1 && (room.phase === 'playing' || room.phase === 'roundOver')) {
-      clearTurnTimer(room);
-      clearRoundOverTimer(room);
-      room.phase = 'gameOver';
-      if (!room.lastRoundResult) {
-        room.lastRoundResult = { declarerId: null, declarerName: null, correct: null, results: [], roundWinnerName: null, roundLoserName: null, eliminated: [] };
+    room.pendingKick = {
+      targetId: target.id,
+      targetName: target.name,
+      initiatorId: initiator.id,
+      initiatorName: initiator.name,
+      requiredVoterIds: eligible.map(p => p.id),
+      votes: { [initiator.id]: true },
+      deadline: Date.now() + KICK_VOTE_SECONDS * 1000,
+      timeoutHandle: null,
+    };
+    room.pendingKick.timeoutHandle = setTimeout(() => {
+      if (room.pendingKick && room.pendingKick.targetId === target.id) {
+        cancelPendingKick(room);
+        broadcastState(room);
       }
-      room.lastRoundResult.eliminated = (room.lastRoundResult.eliminated || []).concat([{ id: target.id, name: target.name, cumulative: target.cumulative }]);
-      room.lastRoundResult.gameWinnerName = stillActive.length === 1 ? stillActive[0].name : null;
-    } else if (wasCurrent) {
-      room.currentIndex = nextActiveIndex(room, room.currentIndex);
-      startTurnTimer(room);
+    }, KICK_VOTE_SECONDS * 1000);
+
+    broadcastState(room);
+  });
+
+  socket.on('kickVote', ({ approve }) => {
+    const room = rooms[socket.data.roomCode];
+    if (!room || !room.pendingKick) return;
+    const voterId = socket.data.playerId;
+    if (!room.pendingKick.requiredVoterIds.includes(voterId)) return;
+    if (voterId in room.pendingKick.votes) return; // already voted
+
+    if (!approve) {
+      cancelPendingKick(room);
+      broadcastState(room);
+      return;
+    }
+
+    room.pendingKick.votes[voterId] = true;
+    const allIn = room.pendingKick.requiredVoterIds.every(id => room.pendingKick.votes[id]);
+    if (allIn) {
+      const targetId = room.pendingKick.targetId;
+      cancelPendingKick(room);
+      performKick(room, targetId);
     }
     broadcastState(room);
   });
@@ -546,6 +674,29 @@ io.on('connection', socket => {
       player.connected = false;
       player.socketId = null;
     }
+
+    // If the disconnecting player was the host, hand hosting duties to
+    // another connected player so the game isn't stuck waiting on someone
+    // who's gone. Without this, only the original host could start rounds
+    // or resolve kicks, and the whole room would freeze if they vanished.
+    if (player && player.id === room.hostId) {
+      const nextHost =
+        room.players.find(p => p.connected && p.active && p.id !== player.id) ||
+        room.players.find(p => p.connected && p.id !== player.id);
+      if (nextHost) room.hostId = nextHost.id;
+    }
+
+    // If there's a kick vote in progress and the disconnecting player was a
+    // required voter (or the target), resolve/cancel it rather than leaving
+    // it stuck forever.
+    if (room.pendingKick) {
+      if (player && room.pendingKick.targetId === player.id) {
+        cancelPendingKick(room);
+      } else if (player && room.pendingKick.requiredVoterIds.includes(player.id) && !(player.id in room.pendingKick.votes)) {
+        cancelPendingKick(room);
+      }
+    }
+
     // keep an empty/fully-disconnected room around for a grace period instead
     // of deleting it instantly, so a brief refresh or a host closing one tab
     // doesn't wipe out the room code for everyone else.
