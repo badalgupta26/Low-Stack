@@ -120,6 +120,7 @@
       <a href="#" id="btn-quit">Quit</a>
     </div>
     <div class="meta">MaxScore (<span id="meta-maxscore"></span>) &nbsp; Deck: <span id="meta-deck"></span></div>
+    <div class="meta room-code-meta">Room code: <strong id="meta-roomcode"></strong> — share this so anyone can rejoin</div>
     <div class="meta" id="meta-turn"></div>
     <div class="meta" id="meta-timer"></div>
 
@@ -161,6 +162,7 @@
   <!-- ROUND / GAME OVER SCREEN -->
   <section id="screen-over" class="screen hidden">
     <h1 id="over-title">Round over</h1>
+    <p class="meta room-code-meta">Room code: <strong id="over-roomcode"></strong> — share this so anyone can rejoin</p>
     <p id="over-declare-line"></p>
     <div id="over-summary" class="summary-lines"></div>
     <table class="ptable">
@@ -209,6 +211,25 @@
     </div>
   </div>
 </div>
+
+<!-- KICK VOTE MODAL (shown to eligible voters) -->
+<div id="kickvote-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span>Kick vote</span>
+    </div>
+    <div class="modal-body">
+      <p id="kickvote-text"></p>
+      <div class="actions">
+        <button id="btn-kickvote-yes">Yes, remove them</button>
+        <button id="btn-kickvote-no">No, keep them</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- KICK VOTE STATUS BANNER (shown to everyone else while a vote is live) -->
+<div id="kickvote-banner" class="kickvote-banner hidden"></div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script src="client.js"></script>
