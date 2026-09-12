@@ -141,6 +141,24 @@ window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(() => { /* ignore */ });
   }
 
+  // If we're not already in a room, this is a fresh visit — check for a
+  // WhatsApp quick-join link. Actual room rejoining happens in the
+  // socket 'connect' handler below so it also covers reconnects, not just
+  // the very first page load.
+  if (!sessionStorage.getItem('ls_code')) {
+    checkQuickJoin();
+  }
+});
+
+let hasCheckedQuickJoinOnce = !!sessionStorage.getItem('ls_code');
+
+// Fires on the very first connection AND every time the socket reconnects
+// after a network drop — this is the actual fix for "the game gets stuck
+// and needs a refresh": previously we only ever tried to rejoin once, on
+// page load, so a dropped connection left the client permanently stale
+// until the person manually reloaded the page.
+socket.on('connect', () => {
+  hideReconnectBanner();
   const code = sessionStorage.getItem('ls_code');
   const pid = sessionStorage.getItem('ls_pid');
   if (code && pid) {
@@ -150,13 +168,39 @@ window.addEventListener('load', () => {
         myId = res.playerId;
       } else {
         clearSession();
-        checkQuickJoin();
+        if (!hasCheckedQuickJoinOnce) {
+          hasCheckedQuickJoinOnce = true;
+          checkQuickJoin();
+        }
       }
     });
-  } else {
+  } else if (!hasCheckedQuickJoinOnce) {
+    hasCheckedQuickJoinOnce = true;
     checkQuickJoin();
   }
 });
+
+socket.on('disconnect', () => {
+  // Only show this once we've actually been in a game — no need to alarm
+  // someone still filling out the home screen.
+  if (sessionStorage.getItem('ls_code')) showReconnectBanner();
+});
+
+function showReconnectBanner() {
+  let el = document.getElementById('reconnect-banner');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'reconnect-banner';
+    el.className = 'reconnect-banner';
+    el.textContent = 'Connection lost — reconnecting…';
+    document.body.appendChild(el);
+  }
+  el.classList.remove('hidden');
+}
+function hideReconnectBanner() {
+  const el = document.getElementById('reconnect-banner');
+  if (el) el.classList.add('hidden');
+}
 
 // ---------- QUICK JOIN (via WhatsApp link with ?room=CODE) ----------
 function checkQuickJoin() {
@@ -311,6 +355,49 @@ function render(state) {
     renderOver(state);
     showScreen('over');
   }
+  renderKickVote(state);
+}
+
+// ---------- KICK VOTE (requires everyone's consent) ----------
+let kickVoteWiredFor = null; // targetId we've already attached button handlers for
+
+function renderKickVote(state) {
+  const modal = document.getElementById('kickvote-modal');
+  const banner = document.getElementById('kickvote-banner');
+  const pk = state.pendingKick;
+
+  if (!pk) {
+    modal.classList.add('hidden');
+    banner.classList.add('hidden');
+    kickVoteWiredFor = null;
+    return;
+  }
+
+  const iAmEligibleVoter = pk.requiredVoterIds.includes(state.myId);
+  const iAlreadyVoted = state.myId in pk.votes;
+  const votesIn = Object.keys(pk.votes).length;
+  const votesNeeded = pk.requiredVoterIds.length + 1; // +1 for the initiator's implicit yes
+
+  if (iAmEligibleVoter && !iAlreadyVoted) {
+    banner.classList.add('hidden');
+    modal.classList.remove('hidden');
+    document.getElementById('kickvote-text').textContent =
+      `${pk.initiatorName} wants to remove ${pk.targetName} from the game. Everyone must agree. Do you approve?`;
+
+    if (kickVoteWiredFor !== pk.targetId) {
+      kickVoteWiredFor = pk.targetId;
+      document.getElementById('btn-kickvote-yes').onclick = () => socket.emit('kickVote', { approve: true });
+      document.getElementById('btn-kickvote-no').onclick = () => socket.emit('kickVote', { approve: false });
+    }
+  } else {
+    modal.classList.add('hidden');
+    banner.classList.remove('hidden');
+    if (pk.targetId === state.myId) {
+      banner.textContent = `A vote is underway to remove you from the game (${votesIn}/${votesNeeded} agreed).`;
+    } else {
+      banner.textContent = `Vote in progress: remove ${pk.targetName}? (${votesIn}/${votesNeeded} agreed)`;
+    }
+  }
 }
 
 function renderLobby(state) {
@@ -327,7 +414,7 @@ function renderLobby(state) {
   state.players.forEach(p => {
     const tr = document.createElement('tr');
     if (p.id === state.myId) tr.classList.add('me');
-    const kickCell = (isHost && p.id !== state.myId)
+    const kickCell = (p.id !== state.myId && !state.pendingKick)
       ? `<td><button class="kick-btn" data-kick="${p.id}">Kick</button></td>`
       : '<td></td>';
     tr.innerHTML = `<td>${escapeHtml(p.name)}${p.id === state.hostId ? ' (host)' : ''}</td><td>${p.connected ? 'Ready' : 'Disconnected'}</td>${kickCell}`;
@@ -335,8 +422,8 @@ function renderLobby(state) {
   });
   body.querySelectorAll('[data-kick]').forEach(btn => {
     btn.addEventListener('click', () => {
-      if (!window.confirm('Remove this player from the room?')) return;
-      socket.emit('kickPlayer', { targetPlayerId: btn.dataset.kick });
+      if (!window.confirm('Ask everyone to vote on removing this player?')) return;
+      socket.emit('requestKick', { targetPlayerId: btn.dataset.kick });
     });
   });
   const startBtn = document.getElementById('btn-start');
@@ -351,6 +438,7 @@ function renderGame(state) {
   document.getElementById('game-title').textContent = 'Hand in progress';
   document.getElementById('meta-maxscore').textContent = state.maxScore;
   document.getElementById('meta-deck').textContent = state.deckCount;
+  document.getElementById('meta-roomcode').textContent = state.code;
 
   const me = state.players.find(p => p.id === state.myId);
   const iAmOut = !!(me && !me.active);
@@ -440,7 +528,6 @@ function renderGame(state) {
   // Score table
   const body = document.getElementById('score-body');
   body.innerHTML = '';
-  const isHostInGame = state.myId === state.hostId;
   const ranked = state.players
     .map(p => ({ ...p }))
     .sort((a, b) => a.cumulative - b.cumulative);
@@ -452,7 +539,7 @@ function renderGame(state) {
     const discardedTxt = lm ? miniGroupHtml(lm.discarded) : '';
     const pickedTxt = lm ? (lm.pickedSource === 'deck' ? miniDeckHtml() : miniCardHtml(lm.picked)) : '';
     const rank = ranked.findIndex(r => r.id === p.id) + 1;
-    const kickCell = (isHostInGame && p.id !== state.myId && p.active)
+    const kickCell = (p.id !== state.myId && p.active && !state.pendingKick)
       ? `<td><button class="kick-btn" data-kick="${p.id}">Kick</button></td>`
       : '<td></td>';
     tr.innerHTML = `<td>${escapeHtml(p.name)}${p.active ? '' : ' (out)'}</td><td>${discardedTxt}</td><td>${pickedTxt}</td><td>${p.cumulative}</td><td>${rank}</td>${kickCell}`;
@@ -460,8 +547,8 @@ function renderGame(state) {
   });
   body.querySelectorAll('[data-kick]').forEach(btn => {
     btn.addEventListener('click', () => {
-      if (!window.confirm('Remove this player from the game? They will be treated as eliminated.')) return;
-      socket.emit('kickPlayer', { targetPlayerId: btn.dataset.kick });
+      if (!window.confirm('Ask everyone to vote on removing this player?')) return;
+      socket.emit('requestKick', { targetPlayerId: btn.dataset.kick });
     });
   });
 
@@ -472,6 +559,7 @@ function renderGame(state) {
 function renderOver(state) {
   const r = state.lastRoundResult;
   document.getElementById('over-title').textContent = state.phase === 'gameOver' ? 'Game over' : 'Round over';
+  document.getElementById('over-roomcode').textContent = state.code;
 
   const declareLineEl = document.getElementById('over-declare-line');
   const summaryEl = document.getElementById('over-summary');
