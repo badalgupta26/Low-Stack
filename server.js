@@ -545,12 +545,21 @@ io.on('connection', socket => {
 
     const stillActive = activePlayers(room);
     const rankSorted = active
-      .map(p => ({ id: p.id, name: p.name, roundScore: scores[p.id], cumulative: p.cumulative, hand: p.hand.map(c => ({ rank: c.rank, suit: c.suit, value: c.value })) }))
+      // roundScore is the actual points this round added to each player's
+      // total (roundAdd) — NOT their raw hand value. The "Total" column and
+      // its rank still sort by cumulative game total, which is correct for
+      // overall standings.
+      .map(p => ({ id: p.id, name: p.name, roundScore: roundAdd[p.id], cumulative: p.cumulative, hand: p.hand.map(c => ({ rank: c.rank, suit: c.suit, value: c.value })) }))
       .sort((a, b) => a.cumulative - b.cumulative)
       .map((r, i) => ({ ...r, rank: i + 1 }));
 
-    const roundWinner = rankSorted[0] || null;
-    const roundLoser = rankSorted[rankSorted.length - 1] || null;
+    // The round's winner/loser must be based on how each player did THIS
+    // round (roundScore), not on the overall cumulative standings — otherwise
+    // whoever's been leading the whole game keeps getting shown as "round
+    // winner" even in rounds they didn't actually win.
+    const byRoundScore = [...rankSorted].sort((a, b) => a.roundScore - b.roundScore);
+    const roundWinner = byRoundScore[0] || null;
+    const roundLoser = byRoundScore[byRoundScore.length - 1] || null;
     const eliminatedThisRound = active.filter(p => !p.active).map(p => ({ id: p.id, name: p.name, cumulative: p.cumulative }));
 
     room.lastRoundResult = {
